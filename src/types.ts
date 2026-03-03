@@ -9,7 +9,7 @@ export interface DrizzleColumn {
   isPrimaryKey: boolean;
   isUnique: boolean;
   isArray: boolean;
-  defaultValue?: any;
+  defaultValue?: unknown;
   length?: number;
 }
 
@@ -67,8 +67,6 @@ export interface GeneratorConfig {
   options?: {
     // Use google.protobuf.Timestamp for date/time fields
     useGoogleTimestamp?: boolean;
-    // Use google.protobuf wrappers for nullable primitive types
-    useGoogleWrappers?: boolean;
     // Prefix for enum values (empty to use enum name as prefix per style guide)
     enumPrefix?: string;
     // Add UNSPECIFIED as the first enum value
@@ -78,6 +76,14 @@ export interface GeneratorConfig {
     // Generate comments in proto files
     generateComments?: boolean;
   };
+}
+
+export interface GenerationResult {
+  tableCount: number;
+  enumCount: number;
+  schemaCount: number;
+  fileCount: number;
+  writtenFiles: string[];
 }
 
 export interface ParsedSchema {

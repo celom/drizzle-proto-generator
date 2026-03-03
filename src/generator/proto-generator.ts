@@ -14,6 +14,7 @@ import type {
 } from '../types.js';
 import {
   mapDrizzleTypeToProto,
+  singularize,
   snakeToCamel,
   toPascalCase,
   generateProtoEnumValue,
@@ -36,7 +37,6 @@ export class ProtoGenerator {
     this.config = {
       options: {
         useGoogleTimestamp: true,
-        useGoogleWrappers: false,
         enumPrefix: '',
         addUnspecified: true,
         preserveSnakeCase: false,
@@ -88,6 +88,25 @@ export class ProtoGenerator {
   }
 
   /**
+   * Resolve a column type to its enum name if it references a known enum.
+   * Returns the enum name or null if not an enum.
+   */
+  private resolveEnumName(columnType: string): string | null {
+    // Direct match (e.g., 'userRoleEnum' or 'role')
+    if (this.enumMap.has(columnType)) {
+      return columnType;
+    }
+
+    // Strip 'Enum'/'enum' suffix and try again (e.g., 'userRoleEnum' -> 'userRole')
+    const stripped = columnType.replace(/enum$/i, '');
+    if (stripped !== columnType && this.enumMap.has(stripped)) {
+      return stripped;
+    }
+
+    return null;
+  }
+
+  /**
    * Analyze enum usage across all tables to identify common types
    */
   private analyzeEnumUsage(tables: DrizzleTable[]): void {
@@ -97,35 +116,19 @@ export class ProtoGenerator {
       const schemaName = table.schema || 'default';
 
       for (const column of table.columns) {
-        let enumName: string | null = null;
+        const enumName = this.resolveEnumName(column.type);
+        if (!enumName) continue;
 
-        // Check if column type is an enum variable name (e.g., 'userRoleEnum')
-        if (column.type.includes('Enum') && this.enumMap.has(column.type)) {
-          enumName = column.type;
-        }
-        // Also check for old-style enum detection
-        else if (
-          column.type.includes('enum') ||
-          this.enumMap.has(column.type)
-        ) {
-          const candidateEnumName = column.type.replace(/enum$/i, '');
-          if (this.enumMap.has(candidateEnumName)) {
-            enumName = candidateEnumName;
-          }
+        const drizzleEnum = this.enumMap.get(enumName)!;
+
+        if (!this.enumUsageMap.has(enumName)) {
+          this.enumUsageMap.set(enumName, {
+            enum: drizzleEnum,
+            schemas: new Set(),
+          });
         }
 
-        if (enumName) {
-          const drizzleEnum = this.enumMap.get(enumName)!;
-
-          if (!this.enumUsageMap.has(enumName)) {
-            this.enumUsageMap.set(enumName, {
-              enum: drizzleEnum,
-              schemas: new Set(),
-            });
-          }
-
-          this.enumUsageMap.get(enumName)!.schemas.add(schemaName);
-        }
+        this.enumUsageMap.get(enumName)!.schemas.add(schemaName);
       }
     }
   }
@@ -179,22 +182,9 @@ export class ProtoGenerator {
 
       // Track which enums are used
       for (const column of table.columns) {
-        // Check if column type is an enum variable name (e.g., 'userRoleEnum')
-        if (column.type.includes('Enum')) {
-          const enumName = column.type;
-          if (this.enumMap.has(enumName)) {
-            usedEnums.add(enumName);
-          }
-        }
-        // Also check for old-style enum detection
-        else if (
-          column.type.includes('enum') ||
-          this.enumMap.has(column.type)
-        ) {
-          const enumName = column.type.replace(/enum$/i, '');
-          if (this.enumMap.has(enumName)) {
-            usedEnums.add(enumName);
-          }
+        const enumName = this.resolveEnumName(column.type);
+        if (enumName) {
+          usedEnums.add(enumName);
         }
       }
 
@@ -263,8 +253,8 @@ export class ProtoGenerator {
       }
     }
 
-    // Generate message name from table name
-    const messageName = toPascalCase(table.name.replace(/s$/, ''));
+    // Generate message name from table name (singularized)
+    const messageName = toPascalCase(singularize(table.name));
 
     return {
       name: messageName,
@@ -285,26 +275,29 @@ export class ProtoGenerator {
   ): ProtoField | null {
     let typeMapping: TypeMapping;
 
-    // Check if this is an enum column first
-    if (column.type.includes('Enum') && this.enumMap.has(column.type)) {
-      // Direct enum reference like 'userRoleEnum'
-      const protoEnumName = this.getProtoEnumName(column.type);
-      const isCommonEnum = commonEnums.some((e) => e.name === column.type);
+    // Check if this is an enum column using unified resolution
+    const enumName = this.resolveEnumName(column.type);
+    if (enumName) {
+      const protoEnumName = this.getProtoEnumName(enumName);
+      const isCommonEnum = commonEnums.some((e) => e.name === enumName);
       const finalEnumName = isCommonEnum
         ? `${this.buildCommonPackageName()}.${protoEnumName}`
         : protoEnumName;
       typeMapping = { protoType: finalEnumName };
     } else {
       // Use standard type mapping
-      typeMapping = mapDrizzleTypeToProto(column);
+      typeMapping = mapDrizzleTypeToProto(column, {
+        useGoogleTimestamp: this.config.options?.useGoogleTimestamp,
+      });
 
-      // Handle enum types from type mapping
+      // Handle enum types from type mapping (fallback for 'enum' in type name)
       if (typeMapping.protoType === 'ENUM_PLACEHOLDER') {
-        // Try to find the enum by the column type
-        const enumName = column.type.replace(/enum$/i, '');
-        if (this.enumMap.has(enumName)) {
-          const protoEnumName = this.getProtoEnumName(enumName);
-          const isCommonEnum = commonEnums.some((e) => e.name === enumName);
+        const fallbackEnumName = column.type.replace(/enum$/i, '');
+        if (this.enumMap.has(fallbackEnumName)) {
+          const protoEnumName = this.getProtoEnumName(fallbackEnumName);
+          const isCommonEnum = commonEnums.some(
+            (e) => e.name === fallbackEnumName,
+          );
           const finalEnumName = isCommonEnum
             ? `${this.buildCommonPackageName()}.${protoEnumName}`
             : protoEnumName;

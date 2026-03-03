@@ -1,6 +1,7 @@
 import { test, expect, describe } from 'bun:test';
 import {
   mapDrizzleTypeToProto,
+  singularize,
   snakeToCamel,
   camelToSnake,
   toPascalCase,
@@ -90,6 +91,90 @@ describe('mapDrizzleTypeToProto', () => {
 
   test('unknown type defaults to string', () => {
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'custom_weird_type' })).protoType).toBe('string');
+  });
+
+  test('timestamp maps to string when useGoogleTimestamp is false', () => {
+    const opts = { useGoogleTimestamp: false };
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), opts).protoType).toBe('string');
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'date' }), opts).protoType).toBe('string');
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'time' }), opts).protoType).toBe('string');
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), opts).needsImport).toBeUndefined();
+  });
+
+  test('timestamp maps to google.protobuf.Timestamp by default', () => {
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' })).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), {}).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), { useGoogleTimestamp: true }).protoType).toBe('google.protobuf.Timestamp');
+  });
+});
+
+describe('singularize', () => {
+  test('removes trailing s from regular plurals', () => {
+    expect(singularize('users')).toBe('user');
+    expect(singularize('posts')).toBe('post');
+    expect(singularize('accounts')).toBe('account');
+    expect(singularize('sessions')).toBe('session');
+    expect(singularize('invoices')).toBe('invoice');
+    expect(singularize('members')).toBe('member');
+    expect(singularize('orders')).toBe('order');
+    expect(singularize('events')).toBe('event');
+    expect(singularize('products')).toBe('product');
+    expect(singularize('messages')).toBe('message');
+  });
+
+  test('does not singularize words ending in ss', () => {
+    expect(singularize('status')).toBe('status');
+    expect(singularize('address')).toBe('address');
+    expect(singularize('access')).toBe('access');
+    expect(singularize('process')).toBe('process');
+  });
+
+  test('does not singularize words ending in us', () => {
+    expect(singularize('status')).toBe('status');
+    expect(singularize('campus')).toBe('campus');
+  });
+
+  test('does not singularize words ending in is', () => {
+    expect(singularize('analysis')).toBe('analysis');
+    expect(singularize('basis')).toBe('basis');
+  });
+
+  test('handles -ies -> -y', () => {
+    expect(singularize('categories')).toBe('category');
+    expect(singularize('entries')).toBe('entry');
+    expect(singularize('policies')).toBe('policy');
+  });
+
+  test('handles -sses -> -ss', () => {
+    expect(singularize('addresses')).toBe('address');
+    expect(singularize('classes')).toBe('class');
+    expect(singularize('processes')).toBe('process');
+  });
+
+  test('handles -shes -> -sh', () => {
+    expect(singularize('crashes')).toBe('crash');
+    expect(singularize('dishes')).toBe('dish');
+  });
+
+  test('handles -ches -> -ch', () => {
+    expect(singularize('watches')).toBe('watch');
+    expect(singularize('batches')).toBe('batch');
+  });
+
+  test('handles -xes -> -x', () => {
+    expect(singularize('boxes')).toBe('box');
+    expect(singularize('indexes')).toBe('index');
+    expect(singularize('taxes')).toBe('tax');
+  });
+
+  test('does not modify words without trailing s', () => {
+    expect(singularize('user')).toBe('user');
+    expect(singularize('data')).toBe('data');
+  });
+
+  test('does not modify short words', () => {
+    expect(singularize('is')).toBe('is');
+    expect(singularize('us')).toBe('us');
   });
 });
 

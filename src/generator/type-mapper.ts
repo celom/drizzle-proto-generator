@@ -9,10 +9,17 @@ export interface TypeMapping {
   needsImport?: string;
 }
 
+export interface TypeMapperOptions {
+  useGoogleTimestamp?: boolean;
+}
+
 /**
  * Map Drizzle column type to Protobuf type
  */
-export function mapDrizzleTypeToProto(column: DrizzleColumn): TypeMapping {
+export function mapDrizzleTypeToProto(
+  column: DrizzleColumn,
+  options: TypeMapperOptions = {},
+): TypeMapping {
   const baseType = column.type.toLowerCase();
 
   // Text types
@@ -64,6 +71,9 @@ export function mapDrizzleTypeToProto(column: DrizzleColumn): TypeMapping {
     baseType.includes('date') ||
     baseType.includes('time')
   ) {
+    if (options.useGoogleTimestamp === false) {
+      return { protoType: 'string' };
+    }
     return {
       protoType: 'google.protobuf.Timestamp',
       needsImport: 'google/protobuf/timestamp.proto',
@@ -72,13 +82,7 @@ export function mapDrizzleTypeToProto(column: DrizzleColumn): TypeMapping {
 
   // JSON type
   if (baseType.includes('json') || baseType.includes('jsonb')) {
-    // Can use either string (for JSON string) or Struct (for structured data)
-    return { protoType: 'string' }; // JSON as string by default
-    // Alternative:
-    // return {
-    //   protoType: 'google.protobuf.Struct',
-    //   needsImport: 'google/protobuf/struct.proto'
-    // };
+    return { protoType: 'string' };
   }
 
   // UUID type
@@ -113,6 +117,43 @@ export function mapDrizzleTypeToProto(column: DrizzleColumn): TypeMapping {
   // Default to string for unknown types
   console.warn(`Unknown Drizzle type: ${column.type}, defaulting to string`);
   return { protoType: 'string' };
+}
+
+/**
+ * Singularize a table name for use as a proto message name.
+ *
+ * Handles common English plural patterns while avoiding
+ * false positives on words that naturally end in 's'.
+ */
+export function singularize(word: string): string {
+  if (!word.endsWith('s') || word.length <= 2) return word;
+
+  // Words ending in 'ss' are not plural (class, address, access, process)
+  if (word.endsWith('ss')) return word;
+
+  // Words ending in 'us' are not plural (status, virus, campus, opus)
+  if (word.endsWith('us')) return word;
+
+  // Words ending in 'is' are not plural (analysis, basis, thesis)
+  if (word.endsWith('is')) return word;
+
+  // -ies -> -y (categories -> category, entries -> entry)
+  if (word.endsWith('ies')) return word.slice(0, -3) + 'y';
+
+  // -sses -> -ss (dresses -> dress, classes -> class, addresses -> address)
+  if (word.endsWith('sses')) return word.slice(0, -2);
+
+  // -shes -> -sh (dishes -> dish, crashes -> crash)
+  if (word.endsWith('shes')) return word.slice(0, -2);
+
+  // -ches -> -ch (watches -> watch, batches -> batch)
+  if (word.endsWith('ches')) return word.slice(0, -2);
+
+  // -xes -> -x (boxes -> box, indexes -> index)
+  if (word.endsWith('xes')) return word.slice(0, -2);
+
+  // Default: remove trailing 's'
+  return word.slice(0, -1);
 }
 
 /**

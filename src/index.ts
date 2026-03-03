@@ -5,7 +5,7 @@
 import { DrizzleSchemaParser } from './parser/drizzle-parser.js';
 import { ProtoGenerator } from './generator/proto-generator.js';
 import { ProtoWriter } from './generator/proto-writer.js';
-import type { GeneratorConfig } from './types.js';
+import type { GeneratorConfig, GenerationResult } from './types.js';
 
 export class ProtoGenRunner {
   private config: GeneratorConfig;
@@ -25,27 +25,26 @@ export class ProtoGenRunner {
   /**
    * Run the proto generation process
    */
-  async run(): Promise<void> {
-    // Step 1: Parse Drizzle schemas
-    console.log('📖 Parsing Drizzle schemas...');
+  async run(): Promise<GenerationResult> {
     const parsedSchema = await this.parser.parseSchemas(this.config.inputPath);
 
-    console.log(`  Found ${parsedSchema.tables.length} tables`);
-    console.log(`  Found ${parsedSchema.enums.length} enums`);
-    console.log(`  Found ${parsedSchema.schemas.length} schemas`);
-
-    // Step 2: Generate proto files
-    console.log('🔨 Generating proto definitions...');
     const protoFiles = this.generator.generateProtoFiles(
       parsedSchema.tables,
       parsedSchema.enums,
     );
 
-    console.log(`  Generated ${protoFiles.size} proto file(s)`);
+    const writtenFiles = await this.writer.writeProtoFiles(
+      protoFiles,
+      this.config.outputPath,
+    );
 
-    // Step 3: Write proto files to disk
-    console.log('💾 Writing proto files...');
-    await this.writer.writeProtoFiles(protoFiles, this.config.outputPath);
+    return {
+      tableCount: parsedSchema.tables.length,
+      enumCount: parsedSchema.enums.length,
+      schemaCount: parsedSchema.schemas.length,
+      fileCount: protoFiles.size,
+      writtenFiles,
+    };
   }
 }
 

@@ -29,6 +29,7 @@ program
   .option('-p, --package <name>', 'Base package name for proto files', 'proto')
   .option('--enum-prefix <prefix>', 'Prefix for enum values', 'PROTO')
   .option('--no-unspecified', 'Do not add UNSPECIFIED enum value')
+  .option('--no-google-timestamp', 'Use string instead of google.protobuf.Timestamp for date/time fields')
   .option('--preserve-snake-case', 'Preserve snake_case in field names')
   .option('--no-comments', 'Do not generate comments')
   .option('-c, --config <path>', 'Path to configuration file')
@@ -54,7 +55,7 @@ program
           protoPackageName: options.package,
           packageResolvers: {},
           options: {
-            useGoogleTimestamp: true,
+            useGoogleTimestamp: options.googleTimestamp !== false,
             enumPrefix: options.enumPrefix,
             addUnspecified: options.unspecified !== false,
             preserveSnakeCase: options.preserveSnakeCase,
@@ -69,19 +70,24 @@ program
         process.exit(1);
       }
 
-      console.log('🚀 Starting proto generation...');
-      console.log(`📂 Input: ${config.inputPath}`);
-      console.log(`📂 Output: ${config.outputPath}`);
-      console.log(`📦 Package: ${config.protoPackageName}`);
-      console.log(`📦 Package Resolvers: `, config.packageResolvers);
+      console.log('Starting proto generation...');
+      console.log(`  Input: ${config.inputPath}`);
+      console.log(`  Output: ${config.outputPath}`);
+      console.log(`  Package: ${config.protoPackageName}`);
 
       // Run the generator
       const runner = new ProtoGenRunner(config);
-      await runner.run();
+      const result = await runner.run();
 
-      console.log('✅ Proto generation completed successfully!');
+      console.log(`  Found ${result.tableCount} tables, ${result.enumCount} enums, ${result.schemaCount} schemas`);
+      console.log(`  Generated ${result.fileCount} proto file(s):`);
+      for (const file of result.writtenFiles) {
+        console.log(`    ${file}`);
+      }
+
+      console.log('Proto generation completed successfully!');
     } catch (error) {
-      console.error('❌ Proto generation failed:', error);
+      console.error('Proto generation failed:', error);
       process.exit(1);
     }
   });
@@ -98,35 +104,33 @@ program
     const configTemplate = `
 /**
  * Proto Generator Configuration
+ * @type {import('drizzle-proto-generator').GeneratorConfig}
  */
 
 export default {
   // Path to your Drizzle schema files
   inputPath: './src/schema',
-  
+
   // Output directory for generated proto files
   outputPath: './proto',
-  
+
   // Base package name for proto files
-  packageName: 'myapp',
-  
+  protoPackageName: 'myapp',
+
   // Generation options
   options: {
     // Use google.protobuf.Timestamp for date/time fields
     useGoogleTimestamp: true,
-    
-    // Use google.protobuf wrappers for nullable primitive types
-    useGoogleWrappers: false,
-    
+
     // Prefix for enum values
     enumPrefix: 'PROTO',
-    
+
     // Add UNSPECIFIED as the first enum value
     addUnspecified: true,
-    
+
     // Preserve snake_case in field names (default: convert to camelCase)
     preserveSnakeCase: false,
-    
+
     // Generate comments in proto files
     generateComments: true,
   },
@@ -141,7 +145,7 @@ export default {
     }
 
     fs.writeFileSync(outputPath, configTemplate, 'utf-8');
-    console.log(`✅ Created configuration file: ${outputPath}`);
+    console.log(`Created configuration file: ${outputPath}`);
   });
 
 program.parse();

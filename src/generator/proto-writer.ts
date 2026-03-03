@@ -8,12 +8,14 @@ import type { ProtoEnum, ProtoField, ProtoFile, ProtoMessage } from '../types.js
 
 export class ProtoWriter {
   /**
-   * Write proto files to disk
+   * Write proto files to disk. Returns the list of written file paths.
    */
   async writeProtoFiles(
     protoFiles: Map<string, ProtoFile>,
     outputPath: string,
-  ): Promise<void> {
+  ): Promise<string[]> {
+    const writtenFiles: string[] = [];
+
     for (const [schemaName, protoFile] of protoFiles.entries()) {
       const filePath = this.getFilePath(outputPath, protoFile);
 
@@ -23,13 +25,12 @@ export class ProtoWriter {
       // Generate proto content
       const content = this.generateProtoContent(protoFile);
 
-      // Format the content (prettier doesn't support .proto, so we'll skip formatting)
-      // In a real implementation, you might use a proto-specific formatter
-
       // Write to disk
       await fs.writeFile(filePath, content, 'utf-8');
-      console.log(`Generated: ${filePath}`);
+      writtenFiles.push(filePath);
     }
+
+    return writtenFiles;
   }
 
   /**
@@ -189,21 +190,5 @@ export class ProtoWriter {
     const fileName = 'gen_types.proto';
 
     return path.join(outputDir, fileName);
-  }
-
-  /**
-   * Get file name from schema name (legacy method, kept for compatibility)
-   */
-  private getFileName(schemaName: string): string {
-    if (schemaName === 'default') {
-      return 'types.proto';
-    }
-
-    const cleanName = schemaName
-      .replace(/_schema$/i, '')
-      .replace(/_/g, '-')
-      .toLowerCase();
-
-    return `${cleanName}.proto`;
   }
 }

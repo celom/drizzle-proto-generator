@@ -88,6 +88,24 @@ describe('End-to-end', () => {
     expect(billingContent).toContain('message Invoice {');
   });
 
+  test('run() returns GenerationResult with correct counts', async () => {
+    const outputDir = path.join(OUTPUT_DIR, 'result-test');
+    const runner = new ProtoGenRunner({
+      inputPath: path.join(FIXTURES_DIR, 'basic'),
+      outputPath: outputDir,
+      protoPackageName: 'testapp',
+    });
+
+    const result = await runner.run();
+
+    expect(result.tableCount).toBeGreaterThanOrEqual(2);
+    expect(result.enumCount).toBeGreaterThanOrEqual(0);
+    expect(result.schemaCount).toBeGreaterThanOrEqual(1);
+    expect(result.fileCount).toBeGreaterThanOrEqual(1);
+    expect(result.writtenFiles.length).toBeGreaterThanOrEqual(1);
+    expect(result.writtenFiles[0]).toContain('gen_types.proto');
+  });
+
   test('auto-generated header contains correct tool name', async () => {
     const outputDir = path.join(OUTPUT_DIR, 'header-test');
     const runner = new ProtoGenRunner({

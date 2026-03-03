@@ -222,4 +222,70 @@ describe('ProtoGenerator', () => {
 
     expect(result.get('default')!.syntax).toBe('proto3');
   });
+
+  test('does not singularize table names ending in ss/us/is', () => {
+    const tables = [
+      makeTable({ name: 'status', columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+      ]}),
+      makeTable({ name: 'access', columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+      ]}),
+    ];
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles(tables, []);
+
+    const messages = result.get('default')!.messages;
+    expect(messages.find(m => m.name === 'Status')).toBeDefined();
+    expect(messages.find(m => m.name === 'Access')).toBeDefined();
+  });
+
+  test('correctly singularizes common table names', () => {
+    const tables = [
+      makeTable({ name: 'categories', columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+      ]}),
+      makeTable({ name: 'addresses', columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+      ]}),
+    ];
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles(tables, []);
+
+    const messages = result.get('default')!.messages;
+    expect(messages.find(m => m.name === 'Category')).toBeDefined();
+    expect(messages.find(m => m.name === 'Address')).toBeDefined();
+  });
+
+  test('maps timestamp fields to string when useGoogleTimestamp is false', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'created_at', type: 'timestamp', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const generator = new ProtoGenerator(makeConfig({ options: { useGoogleTimestamp: false } }));
+    const result = generator.generateProtoFiles([table], []);
+
+    const field = result.get('default')!.messages[0]!.fields[0]!;
+    expect(field.type).toBe('string');
+    expect(result.get('default')!.imports).not.toContain('google/protobuf/timestamp.proto');
+  });
+
+  test('resolves enums by direct enumMap match regardless of naming convention', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'role', type: 'role', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const enums: DrizzleEnum[] = [
+      { name: 'role', values: ['admin', 'viewer'] },
+    ];
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], enums);
+
+    const file = result.get('default')!;
+    expect(file.enums.length).toBe(1);
+    expect(file.enums[0]!.name).toBe('Role');
+    expect(file.messages[0]!.fields[0]!.type).toBe('Role');
+  });
 });

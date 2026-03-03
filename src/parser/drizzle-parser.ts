@@ -9,6 +9,9 @@ import {
   Node,
   VariableDeclaration,
   ObjectLiteralExpression,
+  ScriptTarget,
+  ModuleKind,
+  ModuleResolutionKind,
 } from 'ts-morph';
 import type { CompilerOptions } from 'ts-morph';
 import * as path from 'path';
@@ -27,9 +30,9 @@ import type {
 // ============================================================================
 
 const COMPILER_OPTIONS = {
-  target: 99, // ESNext
-  module: 99, // ESNext
-  moduleResolution: 2, // Node
+  target: ScriptTarget.ESNext,
+  module: ModuleKind.ESNext,
+  moduleResolution: ModuleResolutionKind.Node10,
   allowSyntheticDefaultImports: true,
   esModuleInterop: true,
 };
@@ -406,6 +409,7 @@ export class DrizzleSchemaParser {
   private project: Project;
   private importResolver: ImportResolver;
   private config: Required<ParserConfig>;
+  private knownEnumNames: Set<string> = new Set();
 
   constructor(config: ParserConfig = {}) {
     this.config = {
@@ -470,6 +474,18 @@ export class DrizzleSchemaParser {
 
     const importedConstants = this.collectImports(sourceFile);
 
+    // First pass: collect enum variable names so column parsing can
+    // identify enum references regardless of naming convention
+    sourceFile.forEachDescendant((node) => {
+      if (!Node.isVariableDeclaration(node)) return;
+      const callExpr = getCallExpression(node);
+      if (!callExpr) return;
+      if (callExpr.getExpression().getText() === DRIZZLE_DECLARATIONS.PG_ENUM) {
+        this.knownEnumNames.add(node.getName());
+      }
+    });
+
+    // Second pass: parse all declarations
     sourceFile.forEachDescendant((node) => {
       if (!Node.isVariableDeclaration(node)) return;
 
@@ -658,7 +674,7 @@ export class DrizzleSchemaParser {
     const identifierName = expression.getText();
 
     // Determine type and database column name
-    const isEnum = identifierName.includes('Enum');
+    const isEnum = this.knownEnumNames.has(identifierName) || identifierName.includes('Enum');
     const type = isEnum ? identifierName : extractColumnType(baseCall);
     const dbColumnName = getStringArgument(baseCall, 0) || name;
 
