@@ -1,0 +1,63 @@
+{
+  "name": "drizzle-proto-generator",
+  "version": "0.1.0",
+  "description": "Generate gRPC Protocol Buffer definitions from Drizzle ORM schemas",
+  "license": "MIT",
+  "author": "celom",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/celom/drizzle-proto-generator"
+  },
+  "keywords": [
+    "drizzle",
+    "drizzle-orm",
+    "protobuf",
+    "proto",
+    "grpc",
+    "code-generation",
+    "typescript"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "drizzle-proto-generator": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run clean && bun run build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "glob": "^13.0.6",
+    "ts-morph": "^27.0.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}
