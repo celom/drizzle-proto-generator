@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'bun:test';
 import { ProtoGenerator } from '../src/generator/proto-generator';
-import type { DrizzleTable, DrizzleEnum, GeneratorConfig, ExistingFieldMap, FieldNumberRegistry } from '../src/types';
+import type { SchemaTable, SchemaEnum, GeneratorConfig, ExistingFieldMap, FieldNumberRegistry } from '../src/types';
 
 function makeConfig(overrides: Partial<GeneratorConfig> = {}): GeneratorConfig {
   return {
@@ -11,7 +11,7 @@ function makeConfig(overrides: Partial<GeneratorConfig> = {}): GeneratorConfig {
   };
 }
 
-function makeTable(overrides: Partial<DrizzleTable> = {}): DrizzleTable {
+function makeTable(overrides: Partial<SchemaTable> = {}): SchemaTable {
   return {
     name: 'users',
     columns: [
@@ -129,7 +129,7 @@ describe('ProtoGenerator', () => {
         { name: 'role', type: 'userRoleEnum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
       ],
     });
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'userRoleEnum', values: ['admin', 'editor', 'viewer'] },
     ];
     const generator = new ProtoGenerator(makeConfig());
@@ -146,7 +146,7 @@ describe('ProtoGenerator', () => {
         { name: 'role', type: 'userRoleEnum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
       ],
     });
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'userRoleEnum', values: ['admin', 'viewer'] },
     ];
     const generator = new ProtoGenerator(makeConfig());
@@ -164,7 +164,7 @@ describe('ProtoGenerator', () => {
         { name: 'role', type: 'userRoleEnum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
       ],
     });
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'userRoleEnum', values: ['admin', 'viewer'] },
     ];
     const generator = new ProtoGenerator(makeConfig({ options: { addUnspecified: false } }));
@@ -204,7 +204,7 @@ describe('ProtoGenerator', () => {
         ],
       }),
     ];
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'statusEnum', values: ['active', 'inactive'] },
     ];
     const generator = new ProtoGenerator(makeConfig());
@@ -333,7 +333,7 @@ describe('ProtoGenerator', () => {
         { name: 'role', type: 'role', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
       ],
     });
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'role', values: ['admin', 'viewer'] },
     ];
     const generator = new ProtoGenerator(makeConfig());
@@ -384,7 +384,7 @@ describe('ProtoGenerator - edge cases', () => {
         { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
       ],
     });
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'unusedEnum', values: ['a', 'b'] },
     ];
     const generator = new ProtoGenerator(makeConfig());
@@ -565,7 +565,7 @@ describe('ProtoGenerator - field number stability', () => {
         { name: 'role', type: 'userRoleEnum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
       ],
     });
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'userRoleEnum', values: ['admin', 'viewer'] },
     ];
 
@@ -599,7 +599,7 @@ describe('ProtoGenerator - field number stability', () => {
       ],
     });
     // editor removed
-    const enums: DrizzleEnum[] = [
+    const enums: SchemaEnum[] = [
       { name: 'userRoleEnum', values: ['admin', 'viewer'] },
     ];
 

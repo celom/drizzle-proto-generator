@@ -10,11 +10,12 @@ import type {
   GeneratorConfig,
   GenerationResult,
   FieldNumberRegistry,
+  SchemaParser,
 } from './types.js';
 
 export class ProtoGenRunner {
   private config: GeneratorConfig;
-  private parser: DrizzleSchemaParser;
+  private parser: SchemaParser;
   private generator: ProtoGenerator;
   private writer: ProtoWriter;
   private reader: ProtoReader;

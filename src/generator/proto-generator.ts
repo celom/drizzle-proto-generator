@@ -3,9 +3,9 @@
  */
 
 import type {
-  DrizzleTable,
-  DrizzleColumn,
-  DrizzleEnum,
+  SchemaTable,
+  SchemaColumn,
+  SchemaEnum,
   ProtoMessage,
   ProtoEnum,
   ProtoField,
@@ -15,7 +15,7 @@ import type {
   FieldNumberRegistry,
 } from '../types.js';
 import {
-  mapDrizzleTypeToProto,
+  mapColumnTypeToProto,
   singularize,
   snakeToCamel,
   toPascalCase,
@@ -26,7 +26,7 @@ import {
 import type { TypeMapping } from './type-mapper.js';
 
 interface EnumUsage {
-  enum: DrizzleEnum;
+  enum: SchemaEnum;
   schemas: Set<string>;
 }
 
@@ -47,7 +47,7 @@ function nextAvailableNumber(
 
 export class ProtoGenerator {
   private config: GeneratorConfig;
-  private enumMap: Map<string, DrizzleEnum>;
+  private enumMap: Map<string, SchemaEnum>;
   private enumUsageMap: Map<string, EnumUsage>;
 
   constructor(config: GeneratorConfig) {
@@ -72,8 +72,8 @@ export class ProtoGenerator {
    * Generate proto files from parsed schemas
    */
   generateProtoFiles(
-    tables: DrizzleTable[],
-    enums: DrizzleEnum[],
+    tables: SchemaTable[],
+    enums: SchemaEnum[],
     registry?: FieldNumberRegistry,
   ): Map<string, ProtoFile> {
     // Build enum map for reference
@@ -137,7 +137,7 @@ export class ProtoGenerator {
   /**
    * Analyze enum usage across all tables to identify common types
    */
-  private analyzeEnumUsage(tables: DrizzleTable[]): void {
+  private analyzeEnumUsage(tables: SchemaTable[]): void {
     this.enumUsageMap.clear();
 
     for (const table of tables) {
@@ -147,11 +147,11 @@ export class ProtoGenerator {
         const enumName = this.resolveEnumName(column.type);
         if (!enumName) continue;
 
-        const drizzleEnum = this.enumMap.get(enumName)!;
+        const schemaEnum = this.enumMap.get(enumName)!;
 
         if (!this.enumUsageMap.has(enumName)) {
           this.enumUsageMap.set(enumName, {
-            enum: drizzleEnum,
+            enum: schemaEnum,
             schemas: new Set(),
           });
         }
@@ -164,7 +164,7 @@ export class ProtoGenerator {
   /**
    * Get enums that are used in multiple schemas (common enums)
    */
-  private getCommonEnums(): DrizzleEnum[] {
+  private getCommonEnums(): SchemaEnum[] {
     return Array.from(this.enumUsageMap.values())
       .filter((usage) => usage.schemas.size > 1)
       .map((usage) => usage.enum);
@@ -174,11 +174,11 @@ export class ProtoGenerator {
    * Generate the common proto file containing shared enums
    */
   private generateCommonProtoFile(
-    commonEnums: DrizzleEnum[],
+    commonEnums: SchemaEnum[],
     existingFieldMap?: ExistingFieldMap,
   ): ProtoFile {
-    const enums: ProtoEnum[] = commonEnums.map((drizzleEnum) =>
-      this.enumToProtoEnum(drizzleEnum, existingFieldMap),
+    const enums: ProtoEnum[] = commonEnums.map((schemaEnum) =>
+      this.enumToProtoEnum(schemaEnum, existingFieldMap),
     );
 
     const packageName = this.buildCommonPackageName();
@@ -197,9 +197,9 @@ export class ProtoGenerator {
    */
   private generateProtoFile(
     schemaName: string,
-    tables: DrizzleTable[],
-    allEnums: DrizzleEnum[],
-    commonEnums: DrizzleEnum[] = [],
+    tables: SchemaTable[],
+    allEnums: SchemaEnum[],
+    commonEnums: SchemaEnum[] = [],
     existingFieldMap?: ExistingFieldMap,
   ): ProtoFile {
     const messages: ProtoMessage[] = [];
@@ -252,9 +252,9 @@ export class ProtoGenerator {
     // Add only schema-specific enums to the proto file (exclude common ones)
     for (const enumName of usedEnums) {
       if (!commonEnumNames.has(enumName)) {
-        const drizzleEnum = this.enumMap.get(enumName);
-        if (drizzleEnum) {
-          const protoEnum = this.enumToProtoEnum(drizzleEnum, existingFieldMap);
+        const schemaEnum = this.enumMap.get(enumName);
+        if (schemaEnum) {
+          const protoEnum = this.enumToProtoEnum(schemaEnum, existingFieldMap);
           enums.push(protoEnum);
         }
       }
@@ -276,8 +276,8 @@ export class ProtoGenerator {
    * Convert a Drizzle table to a Proto message
    */
   private tableToMessage(
-    table: DrizzleTable,
-    commonEnums: DrizzleEnum[] = [],
+    table: SchemaTable,
+    commonEnums: SchemaEnum[] = [],
     existingFieldMap?: ExistingFieldMap,
   ): ProtoMessage {
     // Generate message name from table name (singularized)
@@ -362,9 +362,9 @@ export class ProtoGenerator {
    * Convert a Drizzle column to a Proto field
    */
   private columnToField(
-    column: DrizzleColumn,
+    column: SchemaColumn,
     fieldNumber: number,
-    commonEnums: DrizzleEnum[] = [],
+    commonEnums: SchemaEnum[] = [],
   ): ProtoField | null {
     let typeMapping: TypeMapping;
 
@@ -379,7 +379,7 @@ export class ProtoGenerator {
       typeMapping = { protoType: finalEnumName };
     } else {
       // Use standard type mapping
-      typeMapping = mapDrizzleTypeToProto(column, {
+      typeMapping = mapColumnTypeToProto(column, {
         useGoogleTimestamp: this.config.options?.useGoogleTimestamp,
         useGoogleDate: this.config.options?.useGoogleDate,
         useGoogleStruct: this.config.options?.useGoogleStruct,
@@ -425,10 +425,10 @@ export class ProtoGenerator {
    * Convert a Drizzle enum to a Proto enum
    */
   private enumToProtoEnum(
-    drizzleEnum: DrizzleEnum,
+    schemaEnum: SchemaEnum,
     existingFieldMap?: ExistingFieldMap,
   ): ProtoEnum {
-    const protoEnumName = this.getProtoEnumName(drizzleEnum.name);
+    const protoEnumName = this.getProtoEnumName(schemaEnum.name);
     const existingValues = existingFieldMap?.enums.get(protoEnumName);
     const existingReservedNumbers =
       existingFieldMap?.enumReservedNumbers.get(protoEnumName) || [];
@@ -452,7 +452,7 @@ export class ProtoGenerator {
     // Add UNSPECIFIED value at 0 if configured
     if (this.config.options?.addUnspecified) {
       const unspecifiedName = generateProtoEnumValue(
-        drizzleEnum.name,
+        schemaEnum.name,
         'UNSPECIFIED',
         this.config.options?.enumPrefix,
       );
@@ -463,9 +463,9 @@ export class ProtoGenerator {
     }
 
     // Add enum values
-    for (const value of drizzleEnum.values) {
+    for (const value of schemaEnum.values) {
       const valueName = generateProtoEnumValue(
-        drizzleEnum.name,
+        schemaEnum.name,
         value,
         this.config.options?.enumPrefix,
       );
@@ -525,9 +525,9 @@ export class ProtoGenerator {
    * Group tables by schema
    */
   private groupTablesBySchema(
-    tables: DrizzleTable[],
-  ): Map<string, DrizzleTable[]> {
-    const grouped = new Map<string, DrizzleTable[]>();
+    tables: SchemaTable[],
+  ): Map<string, SchemaTable[]> {
+    const grouped = new Map<string, SchemaTable[]>();
 
     for (const table of tables) {
       const schema = table.schema || 'default';

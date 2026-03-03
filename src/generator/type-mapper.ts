@@ -2,7 +2,7 @@
  * Maps Drizzle ORM types to Protobuf types
  */
 
-import type { DrizzleColumn } from '../types.js';
+import type { SchemaColumn } from '../types.js';
 
 export interface TypeMapping {
   protoType: string;
@@ -16,134 +16,104 @@ export interface TypeMapperOptions {
 }
 
 /**
- * Map Drizzle column type to Protobuf type
+ * A single entry in the type mapping table.
+ * Ordering matters: patterns are checked sequentially via substring match.
  */
-export function mapDrizzleTypeToProto(
-  column: DrizzleColumn,
+interface TypeRule {
+  pattern: string;
+  resolve: (options: TypeMapperOptions) => TypeMapping;
+}
+
+const TIMESTAMP_IMPORT = 'google/protobuf/timestamp.proto';
+
+const resolveTimestamp = (opts: TypeMapperOptions): TypeMapping =>
+  opts.useGoogleTimestamp === false
+    ? { protoType: 'string' }
+    : { protoType: 'google.protobuf.Timestamp', needsImport: TIMESTAMP_IMPORT };
+
+/**
+ * Ordered type mapping rules. Order matters for substring matching:
+ * - "timestamp" before "time" (since "timestamp" contains "time")
+ * - "bigint"/"bigserial" before "int"/"serial"
+ * - "jsonb" is handled by "json" (jsonb contains "json")
+ * - "boolean" is handled by "bool" (boolean contains "bool")
+ */
+const TYPE_RULES: TypeRule[] = [
+  // Text types
+  { pattern: 'varchar', resolve: () => ({ protoType: 'string' }) },
+  { pattern: 'text',    resolve: () => ({ protoType: 'string' }) },
+  { pattern: 'char',    resolve: () => ({ protoType: 'string' }) },
+
+  // Integer types (bigint/bigserial before int/serial)
+  { pattern: 'bigint',    resolve: () => ({ protoType: 'int64' }) },
+  { pattern: 'bigserial', resolve: () => ({ protoType: 'int64' }) },
+  { pattern: 'smallint',  resolve: () => ({ protoType: 'int32' }) },
+  { pattern: 'integer',   resolve: () => ({ protoType: 'int32' }) },
+  { pattern: 'int',       resolve: () => ({ protoType: 'int32' }) },
+  { pattern: 'serial',    resolve: () => ({ protoType: 'int32' }) },
+
+  // Float types
+  { pattern: 'real',    resolve: () => ({ protoType: 'float' }) },
+  { pattern: 'float4',  resolve: () => ({ protoType: 'float' }) },
+  { pattern: 'double',  resolve: () => ({ protoType: 'double' }) },
+  { pattern: 'float8',  resolve: () => ({ protoType: 'double' }) },
+  { pattern: 'numeric', resolve: () => ({ protoType: 'double' }) },
+  { pattern: 'decimal', resolve: () => ({ protoType: 'double' }) },
+
+  // Boolean ("bool" matches both "bool" and "boolean")
+  { pattern: 'bool', resolve: () => ({ protoType: 'bool' }) },
+
+  // Temporal types (timestamp before date before time)
+  { pattern: 'timestamp', resolve: resolveTimestamp },
+  {
+    pattern: 'date',
+    resolve: (opts) => {
+      if (opts.useGoogleDate) {
+        return { protoType: 'google.type.Date', needsImport: 'google/type/date.proto' };
+      }
+      return resolveTimestamp(opts);
+    },
+  },
+  { pattern: 'time', resolve: resolveTimestamp },
+
+  // JSON ("json" matches both "json" and "jsonb")
+  {
+    pattern: 'json',
+    resolve: (opts) => opts.useGoogleStruct
+      ? { protoType: 'google.protobuf.Struct', needsImport: 'google/protobuf/struct.proto' }
+      : { protoType: 'string' },
+  },
+
+  // UUID
+  { pattern: 'uuid', resolve: () => ({ protoType: 'string' }) },
+
+  // Binary types
+  { pattern: 'bytea',  resolve: () => ({ protoType: 'bytes' }) },
+  { pattern: 'blob',   resolve: () => ({ protoType: 'bytes' }) },
+  { pattern: 'binary', resolve: () => ({ protoType: 'bytes' }) },
+
+  // Network types
+  { pattern: 'inet',    resolve: () => ({ protoType: 'string' }) },
+  { pattern: 'cidr',    resolve: () => ({ protoType: 'string' }) },
+  { pattern: 'macaddr', resolve: () => ({ protoType: 'string' }) },
+
+  // Enum placeholder (resolved by the generator)
+  { pattern: 'enum', resolve: () => ({ protoType: 'ENUM_PLACEHOLDER' }) },
+];
+
+/**
+ * Map a schema column type to its Protobuf type.
+ */
+export function mapColumnTypeToProto(
+  column: SchemaColumn,
   options: TypeMapperOptions = {},
 ): TypeMapping {
   const baseType = column.type.toLowerCase();
 
-  // Text types
-  if (
-    baseType.includes('varchar') ||
-    baseType.includes('text') ||
-    baseType.includes('char')
-  ) {
-    return { protoType: 'string' };
-  }
-
-  // Integer types
-  if (
-    baseType.includes('int') ||
-    baseType.includes('integer') ||
-    baseType.includes('serial')
-  ) {
-    if (baseType.includes('big')) {
-      return { protoType: 'int64' };
+  for (const rule of TYPE_RULES) {
+    if (baseType.includes(rule.pattern)) {
+      return rule.resolve(options);
     }
-    if (baseType.includes('small')) {
-      return { protoType: 'int32' };
-    }
-    return { protoType: 'int32' };
-  }
-
-  // Floating point types
-  if (baseType.includes('real') || baseType.includes('float4')) {
-    return { protoType: 'float' };
-  }
-
-  if (
-    baseType.includes('double') ||
-    baseType.includes('float8') ||
-    baseType.includes('numeric') ||
-    baseType.includes('decimal')
-  ) {
-    return { protoType: 'double' };
-  }
-
-  // Boolean type
-  if (baseType.includes('bool') || baseType.includes('boolean')) {
-    return { protoType: 'bool' };
-  }
-
-  // Timestamp types (check before 'time' since 'timestamp' contains 'time')
-  if (baseType.includes('timestamp')) {
-    if (options.useGoogleTimestamp === false) {
-      return { protoType: 'string' };
-    }
-    return {
-      protoType: 'google.protobuf.Timestamp',
-      needsImport: 'google/protobuf/timestamp.proto',
-    };
-  }
-
-  // Date type (date-only, no time component)
-  if (baseType.includes('date')) {
-    if (options.useGoogleDate) {
-      return {
-        protoType: 'google.type.Date',
-        needsImport: 'google/type/date.proto',
-      };
-    }
-    if (options.useGoogleTimestamp === false) {
-      return { protoType: 'string' };
-    }
-    return {
-      protoType: 'google.protobuf.Timestamp',
-      needsImport: 'google/protobuf/timestamp.proto',
-    };
-  }
-
-  // Time type (time-only, no date component)
-  if (baseType.includes('time')) {
-    if (options.useGoogleTimestamp === false) {
-      return { protoType: 'string' };
-    }
-    return {
-      protoType: 'google.protobuf.Timestamp',
-      needsImport: 'google/protobuf/timestamp.proto',
-    };
-  }
-
-  // JSON type
-  if (baseType.includes('json') || baseType.includes('jsonb')) {
-    if (options.useGoogleStruct) {
-      return {
-        protoType: 'google.protobuf.Struct',
-        needsImport: 'google/protobuf/struct.proto',
-      };
-    }
-    return { protoType: 'string' };
-  }
-
-  // UUID type
-  if (baseType.includes('uuid')) {
-    return { protoType: 'string' };
-  }
-
-  // Binary types
-  if (
-    baseType.includes('bytea') ||
-    baseType.includes('blob') ||
-    baseType.includes('binary')
-  ) {
-    return { protoType: 'bytes' };
-  }
-
-  // Network types
-  if (
-    baseType.includes('inet') ||
-    baseType.includes('cidr') ||
-    baseType.includes('macaddr')
-  ) {
-    return { protoType: 'string' };
-  }
-
-  // Enum type (will be handled separately)
-  if (baseType.includes('enum')) {
-    // The actual enum name will be extracted from the schema
-    return { protoType: 'ENUM_PLACEHOLDER' };
   }
 
   // Default to string for unknown types
@@ -267,7 +237,7 @@ export function getRequiredImports(mappings: TypeMapping[]): string[] {
 /**
  * Determine if a field should be optional in proto3
  */
-export function shouldBeOptional(column: DrizzleColumn): boolean {
+export function shouldBeOptional(column: SchemaColumn): boolean {
   // In proto3, use optional for nullable fields that aren't repeated
   return column.isNullable && !column.isPrimaryKey;
 }
@@ -276,7 +246,7 @@ export function shouldBeOptional(column: DrizzleColumn): boolean {
  * Generate field comment from column metadata
  */
 export function generateFieldComment(
-  column: DrizzleColumn,
+  column: SchemaColumn,
 ): string | undefined {
   const comments: string[] = [];
 

@@ -18,11 +18,12 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { glob } from 'glob';
 import type {
-  DrizzleTable,
-  DrizzleColumn,
-  DrizzleEnum,
+  SchemaTable,
+  SchemaColumn,
+  SchemaEnum,
   ParsedSchema,
   PackageResolvers,
+  SchemaParser,
 } from '../types.js';
 
 // ============================================================================
@@ -405,7 +406,7 @@ class ImportResolver {
 // Main Parser Class
 // ============================================================================
 
-export class DrizzleSchemaParser {
+export class DrizzleSchemaParser implements SchemaParser {
   private project: Project;
   private importResolver: ImportResolver;
   private config: Required<ParserConfig>;
@@ -497,10 +498,10 @@ export class DrizzleSchemaParser {
 
       switch (parsed.type) {
         case 'enum':
-          result.enums.push(parsed.data as DrizzleEnum);
+          result.enums.push(parsed.data as SchemaEnum);
           break;
         case 'table':
-          result.tables.push(parsed.data as DrizzleTable);
+          result.tables.push(parsed.data as SchemaTable);
           break;
         case 'schema':
           result.schemas.push(parsed.data as string);
@@ -573,7 +574,7 @@ export class DrizzleSchemaParser {
     node: VariableDeclaration,
     callExpr: CallExpression,
     importedConstants: Map<string, string[]>,
-  ): DrizzleEnum | null {
+  ): SchemaEnum | null {
     const name = node.getName();
     const enumDbName = getStringArgument(callExpr, 0);
 
@@ -614,7 +615,7 @@ export class DrizzleSchemaParser {
   private parseTable(
     node: VariableDeclaration,
     callExpr: CallExpression,
-  ): DrizzleTable | null {
+  ): SchemaTable | null {
     const tableName = node.getName();
     const tableDbName = getStringArgument(callExpr, 0);
 
@@ -651,7 +652,7 @@ export class DrizzleSchemaParser {
   /**
    * Parse columns from an object literal
    */
-  private parseColumns(columnsNode: ObjectLiteralExpression): DrizzleColumn[] {
+  private parseColumns(columnsNode: ObjectLiteralExpression): SchemaColumn[] {
     return columnsNode
       .getProperties()
       .filter(Node.isPropertyAssignment)
@@ -661,13 +662,13 @@ export class DrizzleSchemaParser {
           ? this.parseColumn(prop.getName(), initializer)
           : null;
       })
-      .filter((col): col is DrizzleColumn => col !== null);
+      .filter((col): col is SchemaColumn => col !== null);
   }
 
   /**
    * Parse a single column definition
    */
-  private parseColumn(name: string, node: Node): DrizzleColumn | null {
+  private parseColumn(name: string, node: Node): SchemaColumn | null {
     const baseCall = findBaseCall(node);
     if (!baseCall) return null;
 

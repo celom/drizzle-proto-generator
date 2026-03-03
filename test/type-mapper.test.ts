@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'bun:test';
 import {
-  mapDrizzleTypeToProto,
+  mapColumnTypeToProto,
   singularize,
   snakeToCamel,
   camelToSnake,
@@ -10,9 +10,9 @@ import {
   generateFieldComment,
   getRequiredImports,
 } from '../src/generator/type-mapper';
-import type { DrizzleColumn } from '../src/types';
+import type { SchemaColumn } from '../src/types';
 
-function makeColumn(overrides: Partial<DrizzleColumn> = {}): DrizzleColumn {
+function makeColumn(overrides: Partial<SchemaColumn> = {}): SchemaColumn {
   return {
     name: 'test_col',
     type: 'varchar',
@@ -24,118 +24,118 @@ function makeColumn(overrides: Partial<DrizzleColumn> = {}): DrizzleColumn {
   };
 }
 
-describe('mapDrizzleTypeToProto', () => {
+describe('mapColumnTypeToProto', () => {
   test('text types map to string', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'varchar' })).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'text' })).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'char' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'varchar' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'text' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'char' })).protoType).toBe('string');
   });
 
   test('integer types map to int32', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'integer' })).protoType).toBe('int32');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'serial' })).protoType).toBe('int32');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'smallint' })).protoType).toBe('int32');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'integer' })).protoType).toBe('int32');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'serial' })).protoType).toBe('int32');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'smallint' })).protoType).toBe('int32');
   });
 
   test('bigint maps to int64', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'bigint' })).protoType).toBe('int64');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'bigserial' })).protoType).toBe('int64');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'bigint' })).protoType).toBe('int64');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'bigserial' })).protoType).toBe('int64');
   });
 
   test('float types', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'real' })).protoType).toBe('float');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'float4' })).protoType).toBe('float');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'double' })).protoType).toBe('double');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'float8' })).protoType).toBe('double');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'numeric' })).protoType).toBe('double');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'decimal' })).protoType).toBe('double');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'real' })).protoType).toBe('float');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'float4' })).protoType).toBe('float');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'double' })).protoType).toBe('double');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'float8' })).protoType).toBe('double');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'numeric' })).protoType).toBe('double');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'decimal' })).protoType).toBe('double');
   });
 
   test('boolean maps to bool', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'boolean' })).protoType).toBe('bool');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'boolean' })).protoType).toBe('bool');
   });
 
   test('timestamp/date/time map to google.protobuf.Timestamp by default', () => {
-    const ts = mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }));
+    const ts = mapColumnTypeToProto(makeColumn({ type: 'timestamp' }));
     expect(ts.protoType).toBe('google.protobuf.Timestamp');
     expect(ts.needsImport).toBe('google/protobuf/timestamp.proto');
 
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'date' })).protoType).toBe('google.protobuf.Timestamp');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'time' })).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'date' })).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'time' })).protoType).toBe('google.protobuf.Timestamp');
   });
 
   test('date maps to google.type.Date when useGoogleDate is true', () => {
     const opts = { useGoogleDate: true };
-    const result = mapDrizzleTypeToProto(makeColumn({ type: 'date' }), opts);
+    const result = mapColumnTypeToProto(makeColumn({ type: 'date' }), opts);
     expect(result.protoType).toBe('google.type.Date');
     expect(result.needsImport).toBe('google/type/date.proto');
   });
 
   test('date maps to google.type.Date even when useGoogleTimestamp is false', () => {
     const opts = { useGoogleTimestamp: false, useGoogleDate: true };
-    const result = mapDrizzleTypeToProto(makeColumn({ type: 'date' }), opts);
+    const result = mapColumnTypeToProto(makeColumn({ type: 'date' }), opts);
     expect(result.protoType).toBe('google.type.Date');
     expect(result.needsImport).toBe('google/type/date.proto');
   });
 
   test('useGoogleDate does not affect timestamp or time types', () => {
     const opts = { useGoogleDate: true };
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), opts).protoType).toBe('google.protobuf.Timestamp');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'time' }), opts).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' }), opts).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'time' }), opts).protoType).toBe('google.protobuf.Timestamp');
   });
 
   test('json/jsonb map to string by default', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'json' })).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'jsonb' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'json' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'jsonb' })).protoType).toBe('string');
   });
 
   test('json/jsonb map to google.protobuf.Struct when useGoogleStruct is true', () => {
     const opts = { useGoogleStruct: true };
-    const jsonResult = mapDrizzleTypeToProto(makeColumn({ type: 'json' }), opts);
+    const jsonResult = mapColumnTypeToProto(makeColumn({ type: 'json' }), opts);
     expect(jsonResult.protoType).toBe('google.protobuf.Struct');
     expect(jsonResult.needsImport).toBe('google/protobuf/struct.proto');
 
-    const jsonbResult = mapDrizzleTypeToProto(makeColumn({ type: 'jsonb' }), opts);
+    const jsonbResult = mapColumnTypeToProto(makeColumn({ type: 'jsonb' }), opts);
     expect(jsonbResult.protoType).toBe('google.protobuf.Struct');
     expect(jsonbResult.needsImport).toBe('google/protobuf/struct.proto');
   });
 
   test('uuid maps to string', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'uuid' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'uuid' })).protoType).toBe('string');
   });
 
   test('binary types map to bytes', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'bytea' })).protoType).toBe('bytes');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'blob' })).protoType).toBe('bytes');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'binary' })).protoType).toBe('bytes');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'bytea' })).protoType).toBe('bytes');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'blob' })).protoType).toBe('bytes');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'binary' })).protoType).toBe('bytes');
   });
 
   test('network types map to string', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'inet' })).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'cidr' })).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'macaddr' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'inet' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'cidr' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'macaddr' })).protoType).toBe('string');
   });
 
   test('enum type returns placeholder', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'enum' })).protoType).toBe('ENUM_PLACEHOLDER');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'enum' })).protoType).toBe('ENUM_PLACEHOLDER');
   });
 
   test('unknown type defaults to string', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'custom_weird_type' })).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'custom_weird_type' })).protoType).toBe('string');
   });
 
   test('timestamp/date/time map to string when useGoogleTimestamp is false', () => {
     const opts = { useGoogleTimestamp: false };
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), opts).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'date' }), opts).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'time' }), opts).protoType).toBe('string');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), opts).needsImport).toBeUndefined();
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' }), opts).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'date' }), opts).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'time' }), opts).protoType).toBe('string');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' }), opts).needsImport).toBeUndefined();
   });
 
   test('timestamp maps to google.protobuf.Timestamp by default', () => {
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' })).protoType).toBe('google.protobuf.Timestamp');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), {}).protoType).toBe('google.protobuf.Timestamp');
-    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), { useGoogleTimestamp: true }).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' })).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' }), {}).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' }), { useGoogleTimestamp: true }).protoType).toBe('google.protobuf.Timestamp');
   });
 });
 

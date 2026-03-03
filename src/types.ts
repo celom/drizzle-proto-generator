@@ -2,7 +2,7 @@
  * Type definitions for the proto generator
  */
 
-export interface DrizzleColumn {
+export interface SchemaColumn {
   name: string;
   type: string;
   isNullable: boolean;
@@ -13,15 +13,15 @@ export interface DrizzleColumn {
   length?: number;
 }
 
-export interface DrizzleEnum {
+export interface SchemaEnum {
   name: string;
   values: string[];
 }
 
-export interface DrizzleTable {
+export interface SchemaTable {
   name: string;
   schema?: string;
-  columns: DrizzleColumn[];
+  columns: SchemaColumn[];
   indexes?: string[];
 }
 
@@ -97,9 +97,18 @@ export interface GenerationResult {
 }
 
 export interface ParsedSchema {
-  tables: DrizzleTable[];
-  enums: DrizzleEnum[];
+  tables: SchemaTable[];
+  enums: SchemaEnum[];
   schemas: string[];
+}
+
+/**
+ * Interface defining the contract between a schema parser and the proto
+ * generation pipeline. Any ORM or schema tool can implement this to
+ * produce proto definitions.
+ */
+export interface SchemaParser {
+  parseSchemas(inputPath: string): Promise<ParsedSchema>;
 }
 
 /**
