@@ -1,14 +1,47 @@
-import { test, expect, describe } from 'bun:test';
+import { test, expect, describe, beforeAll } from 'bun:test';
 import { DrizzleSchemaParser } from '../src/parser/drizzle-parser';
+import type { ParsedSchema } from '../src/types';
 import * as path from 'path';
 
 const FIXTURES_DIR = path.join(import.meta.dir, 'fixtures');
 
-describe('DrizzleSchemaParser', () => {
-  test('parses basic table with columns', async () => {
+describe('DrizzleSchemaParser - edge cases', () => {
+  test('returns empty results for directory with no .ts files', async () => {
     const parser = new DrizzleSchemaParser();
-    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'basic'));
+    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'empty'));
 
+    expect(result.tables).toEqual([]);
+    expect(result.enums).toEqual([]);
+    expect(result.schemas).toEqual([]);
+  });
+
+  test('returns empty tables when schema file has no table definitions', async () => {
+    const parser = new DrizzleSchemaParser();
+    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'no-tables'));
+
+    expect(result.tables).toEqual([]);
+    expect(result.schemas).toContain('app');
+  });
+
+  test('returns empty results for nonexistent directory', async () => {
+    const parser = new DrizzleSchemaParser();
+    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'does-not-exist'));
+
+    expect(result.tables).toEqual([]);
+    expect(result.enums).toEqual([]);
+    expect(result.schemas).toEqual([]);
+  });
+});
+
+describe('DrizzleSchemaParser - basic fixture', () => {
+  let result: ParsedSchema;
+
+  beforeAll(async () => {
+    const parser = new DrizzleSchemaParser();
+    result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'basic'));
+  });
+
+  test('parses basic table with columns', () => {
     expect(result.tables.length).toBeGreaterThanOrEqual(1);
 
     const usersTable = result.tables.find(t => t.name === 'users');
@@ -28,19 +61,36 @@ describe('DrizzleSchemaParser', () => {
     expect(emailCol!.isUnique).toBe(true);
   });
 
-  test('parses multiple tables from one file', async () => {
-    const parser = new DrizzleSchemaParser();
-    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'basic'));
-
+  test('parses multiple tables from one file', () => {
     const tableNames = result.tables.map(t => t.name);
     expect(tableNames).toContain('users');
     expect(tableNames).toContain('posts');
   });
 
-  test('parses enum definitions', async () => {
-    const parser = new DrizzleSchemaParser();
-    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'enums'));
+  test('detects nullable columns', () => {
+    const usersTable = result.tables.find(t => t.name === 'users')!;
+    expect(usersTable).toBeDefined();
 
+    // age has no .notNull(), should be nullable
+    const ageCol = usersTable.columns.find(c => c.name === 'age');
+    expect(ageCol).toBeDefined();
+    expect(ageCol!.isNullable).toBe(true);
+
+    // name has .notNull(), should not be nullable
+    const nameCol = usersTable.columns.find(c => c.name === 'name');
+    expect(nameCol!.isNullable).toBe(false);
+  });
+});
+
+describe('DrizzleSchemaParser - enums fixture', () => {
+  let result: ParsedSchema;
+
+  beforeAll(async () => {
+    const parser = new DrizzleSchemaParser();
+    result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'enums'));
+  });
+
+  test('parses enum definitions', () => {
     expect(result.enums.length).toBeGreaterThanOrEqual(1);
 
     const roleEnum = result.enums.find(e => e.name === 'userRoleEnum');
@@ -48,17 +98,16 @@ describe('DrizzleSchemaParser', () => {
     expect(roleEnum!.values).toEqual(['admin', 'editor', 'viewer']);
   });
 
-  test('parses tables with enum columns', async () => {
-    const parser = new DrizzleSchemaParser();
-    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'enums'));
-
+  test('parses tables with enum columns', () => {
     const membersTable = result.tables.find(t => t.name === 'members');
     expect(membersTable).toBeDefined();
 
     const roleCol = membersTable!.columns.find(c => c.name === 'role');
     expect(roleCol).toBeDefined();
   });
+});
 
+describe('DrizzleSchemaParser - multi-schema fixture', () => {
   test('parses schema groupings', async () => {
     const parser = new DrizzleSchemaParser();
     const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'multi-schema'));
@@ -74,22 +123,5 @@ describe('DrizzleSchemaParser', () => {
     const invoicesTable = result.tables.find(t => t.name === 'invoices');
     expect(invoicesTable).toBeDefined();
     expect(invoicesTable!.schema).toBe('billing');
-  });
-
-  test('detects nullable columns', async () => {
-    const parser = new DrizzleSchemaParser();
-    const result = await parser.parseSchemas(path.join(FIXTURES_DIR, 'basic'));
-
-    const usersTable = result.tables.find(t => t.name === 'users')!;
-    expect(usersTable).toBeDefined();
-
-    // age has no .notNull(), should be nullable
-    const ageCol = usersTable.columns.find(c => c.name === 'age');
-    expect(ageCol).toBeDefined();
-    expect(ageCol!.isNullable).toBe(true);
-
-    // name has .notNull(), should not be nullable
-    const nameCol = usersTable.columns.find(c => c.name === 'name');
-    expect(nameCol!.isNullable).toBe(false);
   });
 });

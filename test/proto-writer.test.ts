@@ -21,8 +21,23 @@ function makeProtoFile(overrides: Partial<ProtoFile> = {}): ProtoFile {
   };
 }
 
+async function writeAndRead(
+  testName: string,
+  files: Map<string, ProtoFile>,
+  readPackage = 'myapp.user.v1',
+): Promise<string> {
+  const outputDir = path.join(OUTPUT_DIR, testName);
+  const writer = new ProtoWriter();
+  await writer.writeProtoFiles(files, outputDir);
+
+  const packageDir = readPackage.replace(/\./g, '/');
+  const filePath = path.join(outputDir, packageDir, 'gen_types.proto');
+  return fs.readFile(filePath, 'utf-8');
+}
+
 describe('ProtoWriter', () => {
   test('writes proto file to correct path structure', async () => {
+    const outputDir = path.join(OUTPUT_DIR, 'path-structure');
     const writer = new ProtoWriter();
     const files = new Map<string, ProtoFile>();
     files.set('user', makeProtoFile({
@@ -33,55 +48,42 @@ describe('ProtoWriter', () => {
       }],
     }));
 
-    await writer.writeProtoFiles(files, OUTPUT_DIR);
+    await writer.writeProtoFiles(files, outputDir);
 
-    const filePath = path.join(OUTPUT_DIR, 'myapp', 'user', 'v1', 'gen_types.proto');
+    const filePath = path.join(outputDir, 'myapp', 'user', 'v1', 'gen_types.proto');
     const exists = await fs.access(filePath).then(() => true).catch(() => false);
     expect(exists).toBe(true);
   });
 
   test('generated content starts with auto-generated warning', async () => {
-    const writer = new ProtoWriter();
     const files = new Map<string, ProtoFile>();
     files.set('test', makeProtoFile());
 
-    await writer.writeProtoFiles(files, OUTPUT_DIR);
-
-    const filePath = path.join(OUTPUT_DIR, 'myapp', 'user', 'v1', 'gen_types.proto');
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await writeAndRead('warning-header', files);
     expect(content).toContain('WARNING: AUTO-GENERATED FILE');
     expect(content).toContain('drizzle-proto-generator');
   });
 
   test('generated content has correct syntax and package', async () => {
-    const writer = new ProtoWriter();
     const files = new Map<string, ProtoFile>();
     files.set('test', makeProtoFile({ package: 'myapp.billing.v1' }));
 
-    await writer.writeProtoFiles(files, OUTPUT_DIR);
-
-    const filePath = path.join(OUTPUT_DIR, 'myapp', 'billing', 'v1', 'gen_types.proto');
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await writeAndRead('syntax-package', files, 'myapp.billing.v1');
     expect(content).toContain('syntax = "proto3";');
     expect(content).toContain('package myapp.billing.v1;');
   });
 
   test('generated content includes imports', async () => {
-    const writer = new ProtoWriter();
     const files = new Map<string, ProtoFile>();
     files.set('test', makeProtoFile({
       imports: ['google/protobuf/timestamp.proto'],
     }));
 
-    await writer.writeProtoFiles(files, OUTPUT_DIR);
-
-    const filePath = path.join(OUTPUT_DIR, 'myapp', 'user', 'v1', 'gen_types.proto');
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await writeAndRead('imports', files);
     expect(content).toContain('import "google/protobuf/timestamp.proto";');
   });
 
   test('generated content includes enum definitions', async () => {
-    const writer = new ProtoWriter();
     const files = new Map<string, ProtoFile>();
     files.set('test', makeProtoFile({
       enums: [{
@@ -94,10 +96,7 @@ describe('ProtoWriter', () => {
       }],
     }));
 
-    await writer.writeProtoFiles(files, OUTPUT_DIR);
-
-    const filePath = path.join(OUTPUT_DIR, 'myapp', 'user', 'v1', 'gen_types.proto');
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await writeAndRead('enums', files);
     expect(content).toContain('enum UserRole {');
     expect(content).toContain('USER_ROLE_UNSPECIFIED = 0;');
     expect(content).toContain('USER_ROLE_ADMIN = 1;');
@@ -105,7 +104,6 @@ describe('ProtoWriter', () => {
   });
 
   test('generated content includes message definitions', async () => {
-    const writer = new ProtoWriter();
     const files = new Map<string, ProtoFile>();
     files.set('test', makeProtoFile({
       messages: [{
@@ -119,10 +117,7 @@ describe('ProtoWriter', () => {
       }],
     }));
 
-    await writer.writeProtoFiles(files, OUTPUT_DIR);
-
-    const filePath = path.join(OUTPUT_DIR, 'myapp', 'user', 'v1', 'gen_types.proto');
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await writeAndRead('messages', files);
     expect(content).toContain('message User {');
     expect(content).toContain('string id = 1;');
     expect(content).toContain('string name = 2;');
@@ -131,7 +126,6 @@ describe('ProtoWriter', () => {
   });
 
   test('generated content includes field comments', async () => {
-    const writer = new ProtoWriter();
     const files = new Map<string, ProtoFile>();
     files.set('test', makeProtoFile({
       messages: [{
@@ -142,10 +136,7 @@ describe('ProtoWriter', () => {
       }],
     }));
 
-    await writer.writeProtoFiles(files, OUTPUT_DIR);
-
-    const filePath = path.join(OUTPUT_DIR, 'myapp', 'user', 'v1', 'gen_types.proto');
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await writeAndRead('comments', files);
     expect(content).toContain('// Primary key');
   });
 });

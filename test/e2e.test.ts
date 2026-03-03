@@ -60,9 +60,15 @@ describe('End-to-end', () => {
     const protoPath = path.join(outputDir, 'testapp', 'app', 'v1', 'gen_types.proto');
     const content = await fs.readFile(protoPath, 'utf-8');
 
-    // Verify enum definitions
-    expect(content).toContain('enum');
-    expect(content).toContain('UNSPECIFIED');
+    // Verify specific enum definitions from enums fixture
+    expect(content).toContain('enum ProtoUserRole {');
+    expect(content).toContain('PROTO_USER_ROLE_UNSPECIFIED = 0;');
+    expect(content).toContain('PROTO_USER_ROLE_ADMIN = 1;');
+    expect(content).toContain('PROTO_USER_ROLE_EDITOR = 2;');
+    expect(content).toContain('PROTO_USER_ROLE_VIEWER = 3;');
+
+    expect(content).toContain('enum ProtoStatus {');
+    expect(content).toContain('PROTO_STATUS_UNSPECIFIED = 0;');
   });
 
   test('generates separate files for different schemas', async () => {
@@ -75,13 +81,14 @@ describe('End-to-end', () => {
 
     await runner.run();
 
-    // Check auth schema file
+    // Check auth schema file — fixture has accounts + sessions tables
     const authPath = path.join(outputDir, 'testapp', 'auth', 'v1', 'gen_types.proto');
     const authContent = await fs.readFile(authPath, 'utf-8');
     expect(authContent).toContain('package testapp.auth.v1;');
     expect(authContent).toContain('message Account {');
+    expect(authContent).toContain('message Session {');
 
-    // Check billing schema file
+    // Check billing schema file — fixture has invoices table
     const billingPath = path.join(outputDir, 'testapp', 'billing', 'v1', 'gen_types.proto');
     const billingContent = await fs.readFile(billingPath, 'utf-8');
     expect(billingContent).toContain('package testapp.billing.v1;');
@@ -98,11 +105,12 @@ describe('End-to-end', () => {
 
     const result = await runner.run();
 
-    expect(result.tableCount).toBeGreaterThanOrEqual(2);
-    expect(result.enumCount).toBeGreaterThanOrEqual(0);
-    expect(result.schemaCount).toBeGreaterThanOrEqual(1);
-    expect(result.fileCount).toBeGreaterThanOrEqual(1);
-    expect(result.writtenFiles.length).toBeGreaterThanOrEqual(1);
+    // basic fixture has exactly 2 tables (users, posts), 0 enums, 1 schema (app)
+    expect(result.tableCount).toBe(2);
+    expect(result.enumCount).toBe(0);
+    expect(result.schemaCount).toBe(1);
+    expect(result.fileCount).toBe(1);
+    expect(result.writtenFiles).toHaveLength(1);
     expect(result.writtenFiles[0]).toContain('gen_types.proto');
   });
 
@@ -119,6 +127,6 @@ describe('End-to-end', () => {
     const protoPath = path.join(outputDir, 'testapp', 'app', 'v1', 'gen_types.proto');
     const content = await fs.readFile(protoPath, 'utf-8');
     expect(content).toContain('drizzle-proto-generator');
-    expect(content).not.toContain('@bueller');
+    expect(content).toContain('WARNING: AUTO-GENERATED FILE');
   });
 });

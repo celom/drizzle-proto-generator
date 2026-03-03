@@ -289,3 +289,52 @@ describe('ProtoGenerator', () => {
     expect(file.messages[0]!.fields[0]!.type).toBe('Role');
   });
 });
+
+describe('ProtoGenerator - edge cases', () => {
+  test('produces no output for empty tables and enums', () => {
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([], []);
+
+    expect(result.size).toBe(0);
+  });
+
+  test('handles table with no columns gracefully', () => {
+    const table = makeTable({ columns: [] });
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], []);
+
+    const file = result.get('default')!;
+    expect(file.messages.length).toBe(1);
+    expect(file.messages[0]!.fields).toEqual([]);
+  });
+
+  test('falls back to string for unresolved enum column type', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'status', type: 'enum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    // No enums provided — the 'enum' type cannot be resolved
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], []);
+
+    const field = result.get('default')!.messages[0]!.fields[0]!;
+    expect(field.type).toBe('string');
+  });
+
+  test('handles enums with no table references (unused enums are not included)', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+      ],
+    });
+    const enums: DrizzleEnum[] = [
+      { name: 'unusedEnum', values: ['a', 'b'] },
+    ];
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], enums);
+
+    const file = result.get('default')!;
+    expect(file.enums).toEqual([]);
+  });
+});
