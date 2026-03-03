@@ -1,8 +1,24 @@
 # drizzle-proto-generator
 
-Generate gRPC Protocol Buffer (`.proto`) definitions from [Drizzle ORM](https://orm.drizzle.team/) schemas.
+**Drizzle schema as the source of truth. Proto files as the output.**
 
-Works by statically analyzing your TypeScript schema files — Drizzle is **not** imported at runtime.
+Generate gRPC Protocol Buffer definitions from [Drizzle ORM](https://orm.drizzle.team/) schemas. Works by statically analyzing your TypeScript schema files — Drizzle is **not** imported at runtime.
+
+## Why not proto-first?
+
+Proto-first is the right call when multiple teams in different languages independently consume your API. But if your stack is TypeScript and your data model lives in Drizzle, hand-writing `.proto` files means maintaining two sources of truth for the same structure. Every column you add, rename, or remove requires a matching edit in your protos — that's not safety, it's bookkeeping.
+
+This tool eliminates that duplication — think tRPC's philosophy applied to gRPC. The generated `.proto` files are fully standard — any language can consume them. You're not giving up interop, you're skipping the ceremony.
+
+**Use this if:**
+- Your backend is TypeScript with Drizzle ORM
+- You want gRPC's performance and type safety without maintaining proto files by hand
+- You're in a monorepo where Drizzle schemas are the canonical data model
+
+**Use proto-first if:**
+- Multiple teams in different languages define and consume the API contract
+- Your `.proto` files contain service definitions, RPCs, and custom options beyond data types
+- You need fine-grained control over wire format and field numbering
 
 ## Installation
 
