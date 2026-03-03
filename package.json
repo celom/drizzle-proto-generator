@@ -43,9 +43,7 @@
     "prepublishOnly": "bun run clean && bun run build",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "bun run clean && bun run build && changeset publish"
+    "release": "semantic-release"
   },
   "dependencies": {
     "commander": "^14.0.3",
@@ -53,9 +51,10 @@
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.6.0",
-    "@changesets/cli": "^2.30.0",
-    "@types/bun": "latest"
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@types/bun": "latest",
+    "semantic-release": "^25.0.3"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -64,5 +63,19 @@
     "typescript": {
       "optional": true
     }
+  },
+  "release": {
+    "branches": ["main"],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/changelog",
+      "@semantic-release/npm",
+      ["@semantic-release/git", {
+        "assets": ["package.json", "CHANGELOG.md"],
+        "message": "chore(release): ${nextRelease.version}\n\n${nextRelease.notes}"
+      }],
+      "@semantic-release/github"
+    ]
   }
 }
