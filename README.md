@@ -80,6 +80,7 @@ drizzle-proto-generator generate [options]
 | `--google-struct` | | Use `google.protobuf.Struct` for json/jsonb fields |
 | `--preserve-snake-case` | | Preserve snake_case in field names |
 | `--no-comments` | | Do not generate comments |
+| `--fresh` | | Ignore previously generated proto files and assign field numbers sequentially |
 | `-c, --config <path>` | | Path to configuration file |
 
 ### `init`
@@ -138,6 +139,7 @@ drizzle-proto-generator generate -c proto.config.js
 | `options.addUnspecified` | `boolean` | `true` | Add `UNSPECIFIED = 0` as the first enum value |
 | `options.preserveSnakeCase` | `boolean` | `false` | Keep snake_case in field names |
 | `options.generateComments` | `boolean` | `true` | Generate comments in proto files |
+| `options.fresh` | `boolean` | `false` | Ignore previously generated proto files and assign field numbers sequentially |
 
 ## Type Mapping
 
@@ -173,6 +175,24 @@ const runner = new ProtoGenRunner({
 ```
 
 The tool automatically detects workspace roots for pnpm, npm, yarn, bun, nx, turborepo, and lerna.
+
+## Field Number Stability
+
+Protobuf wire compatibility depends on field numbers being stable — changing a field's number is a breaking change for existing clients.
+
+By default, the generator reads previously generated `.proto` files from the output directory before regenerating. This ensures:
+
+- **Existing fields** keep their assigned field numbers across regenerations
+- **New fields** get the next available number (no conflicts)
+- **Removed fields** produce `reserved` directives so their numbers and names are never reused
+
+This means you can safely add or remove columns in your Drizzle schema and regenerate without breaking existing gRPC clients.
+
+To bypass this behavior (e.g., for initial generation or intentional reset), use `--fresh`:
+
+```bash
+drizzle-proto-generator generate --fresh
+```
 
 ## How It Works
 

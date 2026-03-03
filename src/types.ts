@@ -39,12 +39,16 @@ export interface ProtoField {
 export interface ProtoEnum {
   name: string;
   values: { name: string; number: number }[];
+  reservedNumbers?: number[];
+  reservedNames?: string[];
 }
 
 export interface ProtoMessage {
   name: string;
   fields: ProtoField[];
   comment?: string;
+  reservedNumbers?: number[];
+  reservedNames?: string[];
 }
 
 export interface ProtoFile {
@@ -79,6 +83,8 @@ export interface GeneratorConfig {
     preserveSnakeCase?: boolean;
     // Generate comments in proto files
     generateComments?: boolean;
+    // Skip reading previous proto files, assign field numbers sequentially
+    fresh?: boolean;
   };
 }
 
@@ -95,3 +101,24 @@ export interface ParsedSchema {
   enums: DrizzleEnum[];
   schemas: string[];
 }
+
+/**
+ * Represents field/enum number assignments from a previously generated proto file
+ */
+export interface ExistingFieldMap {
+  /** message name → field name → field number */
+  messages: Map<string, Map<string, number>>;
+  /** enum name → value name → value number */
+  enums: Map<string, Map<string, number>>;
+  /** message name → reserved field numbers */
+  messageReservedNumbers: Map<string, number[]>;
+  /** message name → reserved field names */
+  messageReservedNames: Map<string, string[]>;
+  /** enum name → reserved value numbers */
+  enumReservedNumbers: Map<string, number[]>;
+  /** enum name → reserved value names */
+  enumReservedNames: Map<string, string[]>;
+}
+
+/** package name → ExistingFieldMap */
+export type FieldNumberRegistry = Map<string, ExistingFieldMap>;

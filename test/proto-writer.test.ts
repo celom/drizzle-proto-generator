@@ -139,4 +139,56 @@ describe('ProtoWriter', () => {
     const content = await writeAndRead('comments', files);
     expect(content).toContain('// Primary key');
   });
+
+  test('renders reserved numbers in messages', async () => {
+    const files = new Map<string, ProtoFile>();
+    files.set('test', makeProtoFile({
+      messages: [{
+        name: 'User',
+        fields: [
+          { name: 'id', type: 'string', number: 1, optional: false, repeated: false },
+        ],
+        reservedNumbers: [3, 5],
+        reservedNames: ['bio', 'avatar'],
+      }],
+    }));
+
+    const content = await writeAndRead('reserved-message', files);
+    expect(content).toContain('reserved 3, 5;');
+    expect(content).toContain('reserved "bio", "avatar";');
+  });
+
+  test('renders reserved numbers in enums', async () => {
+    const files = new Map<string, ProtoFile>();
+    files.set('test', makeProtoFile({
+      enums: [{
+        name: 'Status',
+        values: [
+          { name: 'STATUS_UNSPECIFIED', number: 0 },
+          { name: 'STATUS_ACTIVE', number: 1 },
+        ],
+        reservedNumbers: [3],
+        reservedNames: ['STATUS_DELETED'],
+      }],
+    }));
+
+    const content = await writeAndRead('reserved-enum', files);
+    expect(content).toContain('reserved 3;');
+    expect(content).toContain('reserved "STATUS_DELETED";');
+  });
+
+  test('omits reserved directives when not present', async () => {
+    const files = new Map<string, ProtoFile>();
+    files.set('test', makeProtoFile({
+      messages: [{
+        name: 'User',
+        fields: [
+          { name: 'id', type: 'string', number: 1, optional: false, repeated: false },
+        ],
+      }],
+    }));
+
+    const content = await writeAndRead('no-reserved', files);
+    expect(content).not.toContain('reserved');
+  });
 });

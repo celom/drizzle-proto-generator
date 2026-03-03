@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'bun:test';
 import { ProtoGenerator } from '../src/generator/proto-generator';
-import type { DrizzleTable, DrizzleEnum, GeneratorConfig } from '../src/types';
+import type { DrizzleTable, DrizzleEnum, GeneratorConfig, ExistingFieldMap, FieldNumberRegistry } from '../src/types';
 
 function makeConfig(overrides: Partial<GeneratorConfig> = {}): GeneratorConfig {
   return {
@@ -392,5 +392,222 @@ describe('ProtoGenerator - edge cases', () => {
 
     const file = result.get('default')!;
     expect(file.enums).toEqual([]);
+  });
+});
+
+function makeExistingFieldMap(overrides: Partial<ExistingFieldMap> = {}): ExistingFieldMap {
+  return {
+    messages: new Map(),
+    enums: new Map(),
+    messageReservedNumbers: new Map(),
+    messageReservedNames: new Map(),
+    enumReservedNumbers: new Map(),
+    enumReservedNames: new Map(),
+    ...overrides,
+  };
+}
+
+describe('ProtoGenerator - field number stability', () => {
+  test('preserves field numbers from registry', () => {
+    const existingFieldMap = makeExistingFieldMap({
+      messages: new Map([
+        ['User', new Map([['id', 1], ['name', 3], ['email', 5]])],
+      ]),
+    });
+    const registry: FieldNumberRegistry = new Map([
+      ['myapp.v1', existingFieldMap],
+    ]);
+
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([makeTable()], [], registry);
+
+    const message = result.get('default')!.messages[0]!;
+    expect(message.fields.find(f => f.name === 'id')!.number).toBe(1);
+    expect(message.fields.find(f => f.name === 'name')!.number).toBe(3);
+    expect(message.fields.find(f => f.name === 'email')!.number).toBe(5);
+  });
+
+  test('assigns next available numbers to new fields', () => {
+    const existingFieldMap = makeExistingFieldMap({
+      messages: new Map([
+        ['User', new Map([['id', 1], ['name', 2]])],
+      ]),
+    });
+    const registry: FieldNumberRegistry = new Map([
+      ['myapp.v1', existingFieldMap],
+    ]);
+
+    const table = makeTable({
+      columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+        { name: 'name', type: 'varchar', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+        { name: 'age', type: 'integer', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], [], registry);
+
+    const message = result.get('default')!.messages[0]!;
+    expect(message.fields.find(f => f.name === 'id')!.number).toBe(1);
+    expect(message.fields.find(f => f.name === 'name')!.number).toBe(2);
+    expect(message.fields.find(f => f.name === 'age')!.number).toBe(3);
+  });
+
+  test('adds reserved entries for removed fields', () => {
+    const existingFieldMap = makeExistingFieldMap({
+      messages: new Map([
+        ['User', new Map([['id', 1], ['name', 2], ['bio', 3]])],
+      ]),
+    });
+    const registry: FieldNumberRegistry = new Map([
+      ['myapp.v1', existingFieldMap],
+    ]);
+
+    // Table now only has id and name (bio was removed)
+    const table = makeTable({
+      columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+        { name: 'name', type: 'varchar', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], [], registry);
+
+    const message = result.get('default')!.messages[0]!;
+    expect(message.reservedNumbers).toEqual([3]);
+    expect(message.reservedNames).toEqual(['bio']);
+  });
+
+  test('carries forward existing reserved entries', () => {
+    const existingFieldMap = makeExistingFieldMap({
+      messages: new Map([
+        ['User', new Map([['id', 1], ['name', 2], ['email', 4]])],
+      ]),
+      messageReservedNumbers: new Map([['User', [3]]]),
+      messageReservedNames: new Map([['User', ['bio']]]),
+    });
+    const registry: FieldNumberRegistry = new Map([
+      ['myapp.v1', existingFieldMap],
+    ]);
+
+    // Now remove email too
+    const table = makeTable({
+      columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+        { name: 'name', type: 'varchar', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], [], registry);
+
+    const message = result.get('default')!.messages[0]!;
+    expect(message.reservedNumbers).toEqual([3, 4]);
+    expect(message.reservedNames).toEqual(['bio', 'email']);
+  });
+
+  test('new field does not reuse reserved numbers', () => {
+    const existingFieldMap = makeExistingFieldMap({
+      messages: new Map([
+        ['User', new Map([['id', 1]])],
+      ]),
+      messageReservedNumbers: new Map([['User', [2, 3]]]),
+    });
+    const registry: FieldNumberRegistry = new Map([
+      ['myapp.v1', existingFieldMap],
+    ]);
+
+    const table = makeTable({
+      columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+        { name: 'age', type: 'integer', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], [], registry);
+
+    const message = result.get('default')!.messages[0]!;
+    // age should get 4 (1 is used, 2 and 3 are reserved)
+    expect(message.fields.find(f => f.name === 'age')!.number).toBe(4);
+  });
+
+  test('falls back to sequential numbering without registry', () => {
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([makeTable()], []);
+
+    const message = result.get('default')!.messages[0]!;
+    expect(message.fields[0]!.number).toBe(1);
+    expect(message.fields[1]!.number).toBe(2);
+    expect(message.fields[2]!.number).toBe(3);
+    expect(message.reservedNumbers).toBeUndefined();
+    expect(message.reservedNames).toBeUndefined();
+  });
+
+  test('preserves enum value numbers from registry', () => {
+    const existingFieldMap = makeExistingFieldMap({
+      enums: new Map([
+        ['UserRole', new Map([
+          ['USER_ROLE_UNSPECIFIED', 0],
+          ['USER_ROLE_ADMIN', 1],
+          ['USER_ROLE_VIEWER', 2],
+        ])],
+      ]),
+    });
+    const registry: FieldNumberRegistry = new Map([
+      ['myapp.v1', existingFieldMap],
+    ]);
+
+    const table = makeTable({
+      columns: [
+        { name: 'role', type: 'userRoleEnum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const enums: DrizzleEnum[] = [
+      { name: 'userRoleEnum', values: ['admin', 'viewer'] },
+    ];
+
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], enums, registry);
+
+    const protoEnum = result.get('default')!.enums[0]!;
+    expect(protoEnum.values.find(v => v.name === 'USER_ROLE_UNSPECIFIED')!.number).toBe(0);
+    expect(protoEnum.values.find(v => v.name === 'USER_ROLE_ADMIN')!.number).toBe(1);
+    expect(protoEnum.values.find(v => v.name === 'USER_ROLE_VIEWER')!.number).toBe(2);
+  });
+
+  test('adds reserved entries for removed enum values', () => {
+    const existingFieldMap = makeExistingFieldMap({
+      enums: new Map([
+        ['UserRole', new Map([
+          ['USER_ROLE_UNSPECIFIED', 0],
+          ['USER_ROLE_ADMIN', 1],
+          ['USER_ROLE_EDITOR', 2],
+          ['USER_ROLE_VIEWER', 3],
+        ])],
+      ]),
+    });
+    const registry: FieldNumberRegistry = new Map([
+      ['myapp.v1', existingFieldMap],
+    ]);
+
+    const table = makeTable({
+      columns: [
+        { name: 'role', type: 'userRoleEnum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    // editor removed
+    const enums: DrizzleEnum[] = [
+      { name: 'userRoleEnum', values: ['admin', 'viewer'] },
+    ];
+
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], enums, registry);
+
+    const protoEnum = result.get('default')!.enums[0]!;
+    expect(protoEnum.reservedNumbers).toEqual([2]);
+    expect(protoEnum.reservedNames).toEqual(['USER_ROLE_EDITOR']);
   });
 });

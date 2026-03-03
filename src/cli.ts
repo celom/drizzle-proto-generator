@@ -38,6 +38,7 @@ program
   .option('--google-struct', 'Use google.protobuf.Struct for json/jsonb fields')
   .option('--preserve-snake-case', 'Preserve snake_case in field names')
   .option('--no-comments', 'Do not generate comments')
+  .option('--fresh', 'Ignore previously generated proto files and assign field numbers sequentially')
   .option('-c, --config <path>', 'Path to configuration file')
   .action(async (options) => {
     try {
@@ -68,6 +69,7 @@ program
             addUnspecified: options.unspecified !== false,
             preserveSnakeCase: options.preserveSnakeCase,
             generateComments: options.comments !== false,
+            fresh: options.fresh || false,
           },
         };
       }
@@ -147,6 +149,9 @@ export default {
 
     // Generate comments in proto files
     generateComments: true,
+
+    // Skip reading previous proto files, assign field numbers sequentially
+    // fresh: false,
   },
 };
 `.trim();

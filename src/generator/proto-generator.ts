@@ -11,6 +11,8 @@ import type {
   ProtoField,
   ProtoFile,
   GeneratorConfig,
+  ExistingFieldMap,
+  FieldNumberRegistry,
 } from '../types.js';
 import {
   mapDrizzleTypeToProto,
@@ -26,6 +28,21 @@ import type { TypeMapping } from './type-mapper.js';
 interface EnumUsage {
   enum: DrizzleEnum;
   schemas: Set<string>;
+}
+
+/**
+ * Find the next available field/value number, skipping used numbers
+ * and the protobuf reserved range 19000-19999.
+ */
+function nextAvailableNumber(
+  usedNumbers: Set<number>,
+  startFrom = 1,
+): number {
+  let n = startFrom;
+  while (usedNumbers.has(n) || (n >= 19000 && n <= 19999)) {
+    n++;
+  }
+  return n;
 }
 
 export class ProtoGenerator {
@@ -57,6 +74,7 @@ export class ProtoGenerator {
   generateProtoFiles(
     tables: DrizzleTable[],
     enums: DrizzleEnum[],
+    registry?: FieldNumberRegistry,
   ): Map<string, ProtoFile> {
     // Build enum map for reference
     enums.forEach((e) => this.enumMap.set(e.name, e));
@@ -71,17 +89,25 @@ export class ProtoGenerator {
     // Generate common proto file if there are shared enums
     const commonEnums = this.getCommonEnums();
     if (commonEnums.length > 0) {
-      const commonProtoFile = this.generateCommonProtoFile(commonEnums);
+      const commonPackage = this.buildCommonPackageName();
+      const existingFieldMap = registry?.get(commonPackage);
+      const commonProtoFile = this.generateCommonProtoFile(
+        commonEnums,
+        existingFieldMap,
+      );
       protoFiles.set('common', commonProtoFile);
     }
 
     // Generate a proto file for each schema
     for (const [schemaName, schemaTables] of tablesBySchema.entries()) {
+      const packageName = this.buildPackageName(schemaName);
+      const existingFieldMap = registry?.get(packageName);
       const protoFile = this.generateProtoFile(
         schemaName,
         schemaTables,
         enums,
         commonEnums,
+        existingFieldMap,
       );
       protoFiles.set(schemaName, protoFile);
     }
@@ -147,9 +173,12 @@ export class ProtoGenerator {
   /**
    * Generate the common proto file containing shared enums
    */
-  private generateCommonProtoFile(commonEnums: DrizzleEnum[]): ProtoFile {
+  private generateCommonProtoFile(
+    commonEnums: DrizzleEnum[],
+    existingFieldMap?: ExistingFieldMap,
+  ): ProtoFile {
     const enums: ProtoEnum[] = commonEnums.map((drizzleEnum) =>
-      this.enumToProtoEnum(drizzleEnum),
+      this.enumToProtoEnum(drizzleEnum, existingFieldMap),
     );
 
     const packageName = this.buildCommonPackageName();
@@ -171,6 +200,7 @@ export class ProtoGenerator {
     tables: DrizzleTable[],
     allEnums: DrizzleEnum[],
     commonEnums: DrizzleEnum[] = [],
+    existingFieldMap?: ExistingFieldMap,
   ): ProtoFile {
     const messages: ProtoMessage[] = [];
     const enums: ProtoEnum[] = [];
@@ -179,7 +209,7 @@ export class ProtoGenerator {
 
     // Convert tables to messages
     for (const table of tables) {
-      const message = this.tableToMessage(table, commonEnums);
+      const message = this.tableToMessage(table, commonEnums, existingFieldMap);
       messages.push(message);
 
       // Track which enums are used
@@ -224,7 +254,7 @@ export class ProtoGenerator {
       if (!commonEnumNames.has(enumName)) {
         const drizzleEnum = this.enumMap.get(enumName);
         if (drizzleEnum) {
-          const protoEnum = this.enumToProtoEnum(drizzleEnum);
+          const protoEnum = this.enumToProtoEnum(drizzleEnum, existingFieldMap);
           enums.push(protoEnum);
         }
       }
@@ -248,19 +278,70 @@ export class ProtoGenerator {
   private tableToMessage(
     table: DrizzleTable,
     commonEnums: DrizzleEnum[] = [],
+    existingFieldMap?: ExistingFieldMap,
   ): ProtoMessage {
+    // Generate message name from table name (singularized)
+    const messageName = toPascalCase(singularize(table.name));
+
+    const existingFields = existingFieldMap?.messages.get(messageName);
+    const existingReservedNumbers =
+      existingFieldMap?.messageReservedNumbers.get(messageName) || [];
+    const existingReservedNames =
+      existingFieldMap?.messageReservedNames.get(messageName) || [];
+
     const fields: ProtoField[] = [];
-    let fieldNumber = 1;
+    const usedNumbers = new Set<number>();
+
+    // Collect already-used numbers from existing fields + existing reservations
+    if (existingFields) {
+      for (const num of existingFields.values()) {
+        usedNumbers.add(num);
+      }
+    }
+    for (const num of existingReservedNumbers) {
+      usedNumbers.add(num);
+    }
+
+    // Track which existing field names are still present
+    const currentFieldNames = new Set<string>();
 
     for (const column of table.columns) {
-      const field = this.columnToField(column, fieldNumber++, commonEnums);
+      const fieldName = this.config.options?.preserveSnakeCase
+        ? column.name
+        : snakeToCamel(column.name);
+      currentFieldNames.add(fieldName);
+
+      // Determine field number: preserve existing or assign next available
+      let fieldNumber: number;
+      if (existingFields?.has(fieldName)) {
+        fieldNumber = existingFields.get(fieldName)!;
+      } else {
+        fieldNumber = nextAvailableNumber(usedNumbers);
+      }
+      usedNumbers.add(fieldNumber);
+
+      const field = this.columnToField(column, fieldNumber, commonEnums);
       if (field) {
         fields.push(field);
       }
     }
 
-    // Generate message name from table name (singularized)
-    const messageName = toPascalCase(singularize(table.name));
+    // Compute reserved entries: carry forward existing + add newly removed fields
+    const reservedNumbers = [...existingReservedNumbers];
+    const reservedNames = [...existingReservedNames];
+
+    if (existingFields) {
+      for (const [name, number] of existingFields.entries()) {
+        if (!currentFieldNames.has(name)) {
+          if (!reservedNumbers.includes(number)) {
+            reservedNumbers.push(number);
+          }
+          if (!reservedNames.includes(name)) {
+            reservedNames.push(name);
+          }
+        }
+      }
+    }
 
     return {
       name: messageName,
@@ -268,6 +349,12 @@ export class ProtoGenerator {
       comment: this.config.options?.generateComments
         ? `Message for ${table.name} table`
         : undefined,
+      reservedNumbers:
+        reservedNumbers.length > 0
+          ? reservedNumbers.sort((a, b) => a - b)
+          : undefined,
+      reservedNames:
+        reservedNames.length > 0 ? reservedNames.sort() : undefined,
     };
   }
 
@@ -337,8 +424,30 @@ export class ProtoGenerator {
   /**
    * Convert a Drizzle enum to a Proto enum
    */
-  private enumToProtoEnum(drizzleEnum: DrizzleEnum): ProtoEnum {
+  private enumToProtoEnum(
+    drizzleEnum: DrizzleEnum,
+    existingFieldMap?: ExistingFieldMap,
+  ): ProtoEnum {
+    const protoEnumName = this.getProtoEnumName(drizzleEnum.name);
+    const existingValues = existingFieldMap?.enums.get(protoEnumName);
+    const existingReservedNumbers =
+      existingFieldMap?.enumReservedNumbers.get(protoEnumName) || [];
+    const existingReservedNames =
+      existingFieldMap?.enumReservedNames.get(protoEnumName) || [];
+
     const values: { name: string; number: number }[] = [];
+    const usedNumbers = new Set<number>();
+    const currentValueNames = new Set<string>();
+
+    // Collect used numbers from existing values + reservations
+    if (existingValues) {
+      for (const num of existingValues.values()) {
+        usedNumbers.add(num);
+      }
+    }
+    for (const num of existingReservedNumbers) {
+      usedNumbers.add(num);
+    }
 
     // Add UNSPECIFIED value at 0 if configured
     if (this.config.options?.addUnspecified) {
@@ -347,25 +456,59 @@ export class ProtoGenerator {
         'UNSPECIFIED',
         this.config.options?.enumPrefix,
       );
-      values.push({ name: unspecifiedName, number: 0 });
+      currentValueNames.add(unspecifiedName);
+      const number = existingValues?.get(unspecifiedName) ?? 0;
+      usedNumbers.add(number);
+      values.push({ name: unspecifiedName, number });
     }
 
     // Add enum values
-    drizzleEnum.values.forEach((value, index) => {
+    for (const value of drizzleEnum.values) {
       const valueName = generateProtoEnumValue(
         drizzleEnum.name,
         value,
         this.config.options?.enumPrefix,
       );
-      const valueNumber = this.config.options?.addUnspecified
-        ? index + 1
-        : index;
+      currentValueNames.add(valueName);
+
+      let valueNumber: number;
+      if (existingValues?.has(valueName)) {
+        valueNumber = existingValues.get(valueName)!;
+      } else {
+        // Enum values start at 0 when UNSPECIFIED is not added
+        const startFrom = this.config.options?.addUnspecified ? 1 : 0;
+        valueNumber = nextAvailableNumber(usedNumbers, startFrom);
+      }
+      usedNumbers.add(valueNumber);
       values.push({ name: valueName, number: valueNumber });
-    });
+    }
+
+    // Compute reserved entries for removed values
+    const reservedNumbers = [...existingReservedNumbers];
+    const reservedNames = [...existingReservedNames];
+
+    if (existingValues) {
+      for (const [name, number] of existingValues.entries()) {
+        if (!currentValueNames.has(name)) {
+          if (!reservedNumbers.includes(number)) {
+            reservedNumbers.push(number);
+          }
+          if (!reservedNames.includes(name)) {
+            reservedNames.push(name);
+          }
+        }
+      }
+    }
 
     return {
-      name: this.getProtoEnumName(drizzleEnum.name),
+      name: protoEnumName,
       values,
+      reservedNumbers:
+        reservedNumbers.length > 0
+          ? reservedNumbers.sort((a, b) => a - b)
+          : undefined,
+      reservedNames:
+        reservedNames.length > 0 ? reservedNames.sort() : undefined,
     };
   }
 

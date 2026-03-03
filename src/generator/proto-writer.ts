@@ -107,6 +107,19 @@ export class ProtoWriter {
     // Enum declaration
     lines.push(`enum ${enumDef.name} {`);
 
+    // Reserved directives
+    if (enumDef.reservedNumbers?.length) {
+      lines.push(`  reserved ${enumDef.reservedNumbers.join(', ')};`);
+    }
+    if (enumDef.reservedNames?.length) {
+      lines.push(
+        `  reserved ${enumDef.reservedNames.map((n) => `"${n}"`).join(', ')};`,
+      );
+    }
+    if (enumDef.reservedNumbers?.length || enumDef.reservedNames?.length) {
+      lines.push('');
+    }
+
     // Enum values
     for (const value of enumDef.values) {
       lines.push(`  ${value.name} = ${value.number};`);
@@ -130,6 +143,19 @@ export class ProtoWriter {
 
     // Message declaration
     lines.push(`message ${message.name} {`);
+
+    // Reserved directives
+    if (message.reservedNumbers?.length) {
+      lines.push(`  reserved ${message.reservedNumbers.join(', ')};`);
+    }
+    if (message.reservedNames?.length) {
+      lines.push(
+        `  reserved ${message.reservedNames.map((n) => `"${n}"`).join(', ')};`,
+      );
+    }
+    if (message.reservedNumbers?.length || message.reservedNames?.length) {
+      lines.push('');
+    }
 
     // Fields
     for (const field of message.fields) {

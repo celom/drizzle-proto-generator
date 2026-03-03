@@ -1,5 +1,6 @@
 import { test, expect, describe, afterAll } from 'bun:test';
 import { ProtoGenRunner } from '../src/index';
+import { ProtoReader } from '../src/reader/proto-reader';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -128,5 +129,87 @@ describe('End-to-end', () => {
     const content = await fs.readFile(protoPath, 'utf-8');
     expect(content).toContain('drizzle-proto-generator');
     expect(content).toContain('WARNING: AUTO-GENERATED FILE');
+  });
+});
+
+describe('End-to-end - field number stability', () => {
+  test('preserves field numbers across regenerations', async () => {
+    const outputDir = path.join(OUTPUT_DIR, 'stability-test');
+    const config = {
+      inputPath: path.join(FIXTURES_DIR, 'basic'),
+      outputPath: outputDir,
+      protoPackageName: 'testapp',
+    };
+
+    // First generation
+    const runner1 = new ProtoGenRunner(config);
+    await runner1.run();
+
+    const protoPath = path.join(outputDir, 'testapp', 'app', 'v1', 'gen_types.proto');
+    const firstContent = await fs.readFile(protoPath, 'utf-8');
+
+    // Read field numbers from first generation
+    const reader = new ProtoReader();
+    const { fieldMap: firstFieldMap } = reader.parseProtoContent(firstContent);
+    const userFieldsBefore = firstFieldMap.messages.get('User')!;
+
+    // Second generation (same schema, should preserve numbers)
+    const runner2 = new ProtoGenRunner(config);
+    await runner2.run();
+
+    const secondContent = await fs.readFile(protoPath, 'utf-8');
+    const { fieldMap: secondFieldMap } = reader.parseProtoContent(secondContent);
+    const userFieldsAfter = secondFieldMap.messages.get('User')!;
+
+    // All field numbers should be identical
+    for (const [name, number] of userFieldsBefore.entries()) {
+      expect(userFieldsAfter.get(name)).toBe(number);
+    }
+  });
+
+  test('fresh flag resets to sequential numbering', async () => {
+    const outputDir = path.join(OUTPUT_DIR, 'fresh-test');
+
+    // First: generate with a manually crafted proto that has gaps
+    const protoDir = path.join(outputDir, 'testapp', 'app', 'v1');
+    await fs.mkdir(protoDir, { recursive: true });
+    await fs.writeFile(
+      path.join(protoDir, 'gen_types.proto'),
+      [
+        'syntax = "proto3";',
+        'package testapp.app.v1;',
+        '',
+        'message User {',
+        '  reserved 2;',
+        '  reserved "removed";',
+        '',
+        '  string id = 1;',
+        '  string name = 5;',
+        '}',
+      ].join('\n'),
+    );
+
+    // Generate with fresh: true — should ignore previous output
+    const runner = new ProtoGenRunner({
+      inputPath: path.join(FIXTURES_DIR, 'basic'),
+      outputPath: outputDir,
+      protoPackageName: 'testapp',
+      options: { fresh: true },
+    });
+    await runner.run();
+
+    const protoPath = path.join(protoDir, 'gen_types.proto');
+    const content = await fs.readFile(protoPath, 'utf-8');
+
+    // Should NOT contain reserved directives
+    expect(content).not.toContain('reserved');
+
+    // Field numbers should be sequential starting from 1
+    const reader = new ProtoReader();
+    const { fieldMap } = reader.parseProtoContent(content);
+    const userFields = fieldMap.messages.get('User')!;
+    const numbers = Array.from(userFields.values()).sort((a, b) => a - b);
+    expect(numbers[0]).toBe(1);
+    expect(numbers[1]).toBe(2);
   });
 });
