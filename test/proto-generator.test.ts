@@ -611,3 +611,20 @@ describe('ProtoGenerator - field number stability', () => {
     expect(protoEnum.reservedNames).toEqual(['USER_ROLE_EDITOR']);
   });
 });
+
+describe('package name validation', () => {
+  test('throws on invalid package name with hyphens', () => {
+    const gen = new ProtoGenerator(makeConfig({ protoPackageName: 'my-app' }));
+    expect(() => gen.generateProtoFiles([makeTable()], [])).toThrow(/Invalid proto package name/);
+  });
+
+  test('throws on package name starting with number', () => {
+    const gen = new ProtoGenerator(makeConfig({ protoPackageName: '1app' }));
+    expect(() => gen.generateProtoFiles([makeTable()], [])).toThrow(/Invalid proto package name/);
+  });
+
+  test('accepts valid package names with dots and underscores', () => {
+    const gen = new ProtoGenerator(makeConfig({ protoPackageName: 'my_app.service' }));
+    expect(() => gen.generateProtoFiles([makeTable()], [])).not.toThrow();
+  });
+});

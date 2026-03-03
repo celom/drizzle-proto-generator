@@ -16,7 +16,7 @@ export interface TypeMapperOptions {
 }
 
 /**
- * A single entry in the type mapping table.
+ * A single entry in the substring fallback table.
  * Ordering matters: patterns are checked sequentially via substring match.
  */
 interface TypeRule {
@@ -31,78 +31,91 @@ const resolveTimestamp = (opts: TypeMapperOptions): TypeMapping =>
     ? { protoType: 'string' }
     : { protoType: 'google.protobuf.Timestamp', needsImport: TIMESTAMP_IMPORT };
 
+const resolveDate = (opts: TypeMapperOptions): TypeMapping => {
+  if (opts.useGoogleDate) {
+    return { protoType: 'google.type.Date', needsImport: 'google/type/date.proto' };
+  }
+  return resolveTimestamp(opts);
+};
+
+const resolveJson = (opts: TypeMapperOptions): TypeMapping =>
+  opts.useGoogleStruct
+    ? { protoType: 'google.protobuf.Struct', needsImport: 'google/protobuf/struct.proto' }
+    : { protoType: 'string' };
+
+const toString = () => ({ protoType: 'string' }) as TypeMapping;
+const toInt32 = () => ({ protoType: 'int32' }) as TypeMapping;
+const toInt64 = () => ({ protoType: 'int64' }) as TypeMapping;
+const toFloat = () => ({ protoType: 'float' }) as TypeMapping;
+const toDouble = () => ({ protoType: 'double' }) as TypeMapping;
+const toBool = () => ({ protoType: 'bool' }) as TypeMapping;
+const toBytes = () => ({ protoType: 'bytes' }) as TypeMapping;
+
 /**
- * Ordered type mapping rules. Order matters for substring matching:
- * - "timestamp" before "time" (since "timestamp" contains "time")
- * - "bigint"/"bigserial" before "int"/"serial"
- * - "jsonb" is handled by "json" (jsonb contains "json")
- * - "boolean" is handled by "bool" (boolean contains "bool")
+ * Exact-match type map. Covers all known Drizzle/PostgreSQL types.
+ * O(1) lookup — no ordering concerns.
  */
-const TYPE_RULES: TypeRule[] = [
-  // Text types
-  { pattern: 'varchar', resolve: () => ({ protoType: 'string' }) },
-  { pattern: 'text',    resolve: () => ({ protoType: 'string' }) },
-  { pattern: 'char',    resolve: () => ({ protoType: 'string' }) },
-
-  // Integer types (bigint/bigserial before int/serial)
-  { pattern: 'bigint',    resolve: () => ({ protoType: 'int64' }) },
-  { pattern: 'bigserial', resolve: () => ({ protoType: 'int64' }) },
-  { pattern: 'smallint',  resolve: () => ({ protoType: 'int32' }) },
-  { pattern: 'integer',   resolve: () => ({ protoType: 'int32' }) },
-  { pattern: 'int',       resolve: () => ({ protoType: 'int32' }) },
-  { pattern: 'serial',    resolve: () => ({ protoType: 'int32' }) },
-
-  // Float types
-  { pattern: 'real',    resolve: () => ({ protoType: 'float' }) },
-  { pattern: 'float4',  resolve: () => ({ protoType: 'float' }) },
-  { pattern: 'double',  resolve: () => ({ protoType: 'double' }) },
-  { pattern: 'float8',  resolve: () => ({ protoType: 'double' }) },
-  { pattern: 'numeric', resolve: () => ({ protoType: 'double' }) },
-  { pattern: 'decimal', resolve: () => ({ protoType: 'double' }) },
-
-  // Boolean ("bool" matches both "bool" and "boolean")
-  { pattern: 'bool', resolve: () => ({ protoType: 'bool' }) },
-
-  // Temporal types (timestamp before date before time)
-  { pattern: 'timestamp', resolve: resolveTimestamp },
-  {
-    pattern: 'date',
-    resolve: (opts) => {
-      if (opts.useGoogleDate) {
-        return { protoType: 'google.type.Date', needsImport: 'google/type/date.proto' };
-      }
-      return resolveTimestamp(opts);
-    },
-  },
-  { pattern: 'time', resolve: resolveTimestamp },
-
-  // JSON ("json" matches both "json" and "jsonb")
-  {
-    pattern: 'json',
-    resolve: (opts) => opts.useGoogleStruct
-      ? { protoType: 'google.protobuf.Struct', needsImport: 'google/protobuf/struct.proto' }
-      : { protoType: 'string' },
-  },
-
+const EXACT_TYPE_MAP = new Map<string, (opts: TypeMapperOptions) => TypeMapping>([
+  // Text
+  ['varchar', toString],
+  ['text', toString],
+  ['char', toString],
+  // Integer
+  ['bigint', toInt64],
+  ['bigserial', toInt64],
+  ['smallint', toInt32],
+  ['integer', toInt32],
+  ['int', toInt32],
+  ['serial', toInt32],
+  // Float
+  ['real', toFloat],
+  ['float4', toFloat],
+  ['double', toDouble],
+  ['float8', toDouble],
+  ['numeric', toDouble],
+  ['decimal', toDouble],
+  // Boolean
+  ['bool', toBool],
+  ['boolean', toBool],
+  // Temporal
+  ['timestamp', resolveTimestamp],
+  ['timestamptz', resolveTimestamp],
+  ['date', resolveDate],
+  ['time', resolveTimestamp],
+  ['timetz', resolveTimestamp],
+  // JSON
+  ['json', resolveJson],
+  ['jsonb', resolveJson],
   // UUID
-  { pattern: 'uuid', resolve: () => ({ protoType: 'string' }) },
+  ['uuid', toString],
+  // Binary
+  ['bytea', toBytes],
+  ['blob', toBytes],
+  ['binary', toBytes],
+  // Network
+  ['inet', toString],
+  ['cidr', toString],
+  ['macaddr', toString],
+]);
 
-  // Binary types
-  { pattern: 'bytea',  resolve: () => ({ protoType: 'bytes' }) },
-  { pattern: 'blob',   resolve: () => ({ protoType: 'bytes' }) },
-  { pattern: 'binary', resolve: () => ({ protoType: 'bytes' }) },
-
-  // Network types
-  { pattern: 'inet',    resolve: () => ({ protoType: 'string' }) },
-  { pattern: 'cidr',    resolve: () => ({ protoType: 'string' }) },
-  { pattern: 'macaddr', resolve: () => ({ protoType: 'string' }) },
-
-  // Enum placeholder (resolved by the generator)
+/**
+ * Substring fallback for unknown type variants (e.g. vendor-specific types).
+ * Order matters: "timestamp" before "time", etc.
+ */
+const SUBSTRING_RULES: TypeRule[] = [
+  { pattern: 'timestamp', resolve: resolveTimestamp },
+  { pattern: 'date', resolve: resolveDate },
+  { pattern: 'time', resolve: resolveTimestamp },
+  { pattern: 'json', resolve: resolveJson },
+  { pattern: 'int', resolve: toInt32 },
+  { pattern: 'char', resolve: toString },
+  { pattern: 'bool', resolve: toBool },
   { pattern: 'enum', resolve: () => ({ protoType: 'ENUM_PLACEHOLDER' }) },
 ];
 
 /**
  * Map a schema column type to its Protobuf type.
+ * Tries exact match first, then falls back to substring matching.
  */
 export function mapColumnTypeToProto(
   column: SchemaColumn,
@@ -110,7 +123,12 @@ export function mapColumnTypeToProto(
 ): TypeMapping {
   const baseType = column.type.toLowerCase();
 
-  for (const rule of TYPE_RULES) {
+  // Exact match (O(1) lookup)
+  const exact = EXACT_TYPE_MAP.get(baseType);
+  if (exact) return exact(options);
+
+  // Substring fallback for unknown type variants
+  for (const rule of SUBSTRING_RULES) {
     if (baseType.includes(rule.pattern)) {
       return rule.resolve(options);
     }
@@ -152,6 +170,12 @@ export function singularize(word: string): string {
 
   // -xes -> -x (boxes -> box, indexes -> index)
   if (word.endsWith('xes')) return word.slice(0, -2);
+
+  // -zzes -> -zz (buzzes -> buzz, fizzes -> fizz)
+  if (word.endsWith('zzes')) return word.slice(0, -2);
+
+  // -oes -> -o (heroes -> hero, tomatoes -> tomato, potatoes -> potato)
+  if (word.endsWith('oes')) return word.slice(0, -2);
 
   // Default: remove trailing 's'
   return word.slice(0, -1);

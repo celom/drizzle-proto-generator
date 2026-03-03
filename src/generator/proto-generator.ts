@@ -45,6 +45,21 @@ function nextAvailableNumber(
   return n;
 }
 
+/**
+ * Validate that a proto package name is valid per the protobuf spec.
+ * Each dot-separated segment must start with a letter and contain only
+ * lowercase letters, digits, and underscores.
+ */
+function validatePackageName(name: string): void {
+  if (!/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/.test(name)) {
+    throw new Error(
+      `Invalid proto package name "${name}". ` +
+      `Package names must use lowercase letters, digits, underscores, and dots. ` +
+      `Each segment must start with a letter.`,
+    );
+  }
+}
+
 export class ProtoGenerator {
   private config: GeneratorConfig;
   private enumMap: Map<string, SchemaEnum>;
@@ -76,6 +91,8 @@ export class ProtoGenerator {
     enums: SchemaEnum[],
     registry?: FieldNumberRegistry,
   ): Map<string, ProtoFile> {
+    validatePackageName(this.config.protoPackageName);
+
     // Build enum map for reference
     enums.forEach((e) => this.enumMap.set(e.name, e));
 

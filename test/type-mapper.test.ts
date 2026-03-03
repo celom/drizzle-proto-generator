@@ -132,6 +132,11 @@ describe('mapColumnTypeToProto', () => {
     expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' }), opts).needsImport).toBeUndefined();
   });
 
+  test('timestamptz and timetz exact matches', () => {
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timestamptz' })).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapColumnTypeToProto(makeColumn({ type: 'timetz' })).protoType).toBe('google.protobuf.Timestamp');
+  });
+
   test('timestamp maps to google.protobuf.Timestamp by default', () => {
     expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' })).protoType).toBe('google.protobuf.Timestamp');
     expect(mapColumnTypeToProto(makeColumn({ type: 'timestamp' }), {}).protoType).toBe('google.protobuf.Timestamp');
@@ -196,6 +201,17 @@ describe('singularize', () => {
     expect(singularize('boxes')).toBe('box');
     expect(singularize('indexes')).toBe('index');
     expect(singularize('taxes')).toBe('tax');
+  });
+
+  test('handles -oes -> -o', () => {
+    expect(singularize('heroes')).toBe('hero');
+    expect(singularize('tomatoes')).toBe('tomato');
+    expect(singularize('potatoes')).toBe('potato');
+  });
+
+  test('handles -zzes -> -zz', () => {
+    expect(singularize('buzzes')).toBe('buzz');
+    expect(singularize('fizzes')).toBe('fizz');
   });
 
   test('does not modify words without trailing s', () => {
