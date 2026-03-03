@@ -75,14 +75,13 @@ describe('CLI - generate command', () => {
     expect(content).not.toContain('import "google/protobuf/timestamp.proto"');
   });
 
-  test('respects --preserve-snake-case flag', async () => {
-    const outputDir = path.join(OUTPUT_DIR, 'snake-case');
+  test('uses snake_case field names by default', async () => {
+    const outputDir = path.join(OUTPUT_DIR, 'snake-case-default');
     const { exitCode } = await runCli([
       'generate',
       '-i', path.join(FIXTURES_DIR, 'basic'),
       '-o', outputDir,
       '-p', 'clitest',
-      '--preserve-snake-case',
     ]);
 
     expect(exitCode).toBe(0);
@@ -91,6 +90,24 @@ describe('CLI - generate command', () => {
     const content = await fs.readFile(protoPath, 'utf-8');
     expect(content).toContain('created_at');
     expect(content).not.toContain('createdAt');
+  });
+
+  test('respects --camel-case flag', async () => {
+    const outputDir = path.join(OUTPUT_DIR, 'camel-case');
+    const { exitCode } = await runCli([
+      'generate',
+      '-i', path.join(FIXTURES_DIR, 'basic'),
+      '-o', outputDir,
+      '-p', 'clitest',
+      '--camel-case',
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    const protoPath = path.join(outputDir, 'clitest', 'app', 'v1', 'gen_types.proto');
+    const content = await fs.readFile(protoPath, 'utf-8');
+    expect(content).toContain('createdAt');
+    expect(content).not.toContain('created_at');
   });
 });
 

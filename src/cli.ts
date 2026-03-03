@@ -36,7 +36,7 @@ program
   .option('--no-google-timestamp', 'Use string instead of google.protobuf.Timestamp for date/time fields')
   .option('--google-date', 'Use google.type.Date for date fields')
   .option('--google-struct', 'Use google.protobuf.Struct for json/jsonb fields')
-  .option('--preserve-snake-case', 'Preserve snake_case in field names')
+  .option('--camel-case', 'Use camelCase for field names instead of snake_case')
   .option('--no-comments', 'Do not generate comments')
   .option('--fresh', 'Ignore previously generated proto files and assign field numbers sequentially')
   .option('-c, --config <path>', 'Path to configuration file')
@@ -67,7 +67,7 @@ program
             useGoogleStruct: options.googleStruct || false,
             enumPrefix: options.enumPrefix,
             addUnspecified: options.unspecified !== false,
-            preserveSnakeCase: options.preserveSnakeCase,
+            useCamelCase: options.camelCase || false,
             generateComments: options.comments !== false,
             fresh: options.fresh || false,
           },
@@ -144,8 +144,8 @@ export default {
     // Add UNSPECIFIED as the first enum value
     addUnspecified: true,
 
-    // Preserve snake_case in field names (default: convert to camelCase)
-    preserveSnakeCase: false,
+    // Use camelCase for field names (default: snake_case per proto style guide)
+    useCamelCase: false,
 
     // Generate comments in proto files
     generateComments: true,

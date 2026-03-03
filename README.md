@@ -78,7 +78,7 @@ drizzle-proto-generator generate [options]
 | `--no-google-timestamp` | | Use `string` instead of `google.protobuf.Timestamp` for date/time fields |
 | `--google-date` | | Use `google.type.Date` for date fields |
 | `--google-struct` | | Use `google.protobuf.Struct` for json/jsonb fields |
-| `--preserve-snake-case` | | Preserve snake_case in field names |
+| `--camel-case` | | Use camelCase for field names instead of snake_case |
 | `--no-comments` | | Do not generate comments |
 | `--fresh` | | Ignore previously generated proto files and assign field numbers sequentially |
 | `-c, --config <path>` | | Path to configuration file |
@@ -112,7 +112,7 @@ export default {
     useGoogleStruct: false,
     enumPrefix: 'PROTO',
     addUnspecified: true,
-    preserveSnakeCase: false,
+    useCamelCase: false,
     generateComments: true,
   },
 };
@@ -137,7 +137,7 @@ drizzle-proto-generator generate -c proto.config.js
 | `options.useGoogleStruct` | `boolean` | `false` | Use `google.protobuf.Struct` for json/jsonb fields |
 | `options.enumPrefix` | `string` | `''` | Prefix for enum values (CLI default: `PROTO`) |
 | `options.addUnspecified` | `boolean` | `true` | Add `UNSPECIFIED = 0` as the first enum value |
-| `options.preserveSnakeCase` | `boolean` | `false` | Keep snake_case in field names |
+| `options.useCamelCase` | `boolean` | `false` | Use camelCase for field names (default: snake_case per proto style guide) |
 | `options.generateComments` | `boolean` | `true` | Generate comments in proto files |
 | `options.fresh` | `boolean` | `false` | Ignore previously generated proto files and assign field numbers sequentially |
 

@@ -46,7 +46,7 @@ describe('ProtoGenerator', () => {
     expect(message.fields[2]!.number).toBe(3);
   });
 
-  test('converts field names to camelCase by default', () => {
+  test('uses snake_case field names by default', () => {
     const table = makeTable({
       columns: [
         { name: 'created_at', type: 'timestamp', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
@@ -56,20 +56,20 @@ describe('ProtoGenerator', () => {
     const result = generator.generateProtoFiles([table], []);
 
     const field = result.get('default')!.messages[0]!.fields[0]!;
-    expect(field.name).toBe('createdAt');
+    expect(field.name).toBe('created_at');
   });
 
-  test('preserves snake_case when configured', () => {
+  test('converts to camelCase when configured', () => {
     const table = makeTable({
       columns: [
         { name: 'created_at', type: 'timestamp', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
       ],
     });
-    const generator = new ProtoGenerator(makeConfig({ options: { preserveSnakeCase: true } }));
+    const generator = new ProtoGenerator(makeConfig({ options: { useCamelCase: true } }));
     const result = generator.generateProtoFiles([table], []);
 
     const field = result.get('default')!.messages[0]!.fields[0]!;
-    expect(field.name).toBe('created_at');
+    expect(field.name).toBe('createdAt');
   });
 
   test('marks nullable non-PK fields as optional', () => {

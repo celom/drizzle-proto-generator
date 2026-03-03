@@ -79,8 +79,8 @@ export interface GeneratorConfig {
     enumPrefix?: string;
     // Add UNSPECIFIED as the first enum value
     addUnspecified?: boolean;
-    // Preserve snake_case in field names (per protobuf style guide)
-    preserveSnakeCase?: boolean;
+    // Use camelCase for field names instead of snake_case (proto style guide recommends snake_case)
+    useCamelCase?: boolean;
     // Generate comments in proto files
     generateComments?: boolean;
     // Skip reading previous proto files, assign field numbers sequentially

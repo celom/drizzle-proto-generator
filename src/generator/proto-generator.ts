@@ -59,7 +59,7 @@ export class ProtoGenerator {
         useGoogleStruct: false,
         enumPrefix: '',
         addUnspecified: true,
-        preserveSnakeCase: false,
+        useCamelCase: false,
         generateComments: true,
         ...config.options,
       },
@@ -306,9 +306,9 @@ export class ProtoGenerator {
     const currentFieldNames = new Set<string>();
 
     for (const column of table.columns) {
-      const fieldName = this.config.options?.preserveSnakeCase
-        ? column.name
-        : snakeToCamel(column.name);
+      const fieldName = this.config.options?.useCamelCase
+        ? snakeToCamel(column.name)
+        : column.name;
       currentFieldNames.add(fieldName);
 
       // Determine field number: preserve existing or assign next available
@@ -405,9 +405,9 @@ export class ProtoGenerator {
     }
 
     // Convert field name
-    const fieldName = this.config.options?.preserveSnakeCase
-      ? column.name
-      : snakeToCamel(column.name);
+    const fieldName = this.config.options?.useCamelCase
+      ? snakeToCamel(column.name)
+      : column.name;
 
     return {
       name: fieldName,
