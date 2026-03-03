@@ -16,7 +16,7 @@ export class ProtoWriter {
   ): Promise<string[]> {
     const writtenFiles: string[] = [];
 
-    for (const [schemaName, protoFile] of protoFiles.entries()) {
+    for (const [, protoFile] of protoFiles.entries()) {
       const filePath = this.getFilePath(outputPath, protoFile);
 
       // Ensure output directory exists

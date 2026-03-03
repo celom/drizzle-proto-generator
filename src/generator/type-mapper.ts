@@ -11,6 +11,8 @@ export interface TypeMapping {
 
 export interface TypeMapperOptions {
   useGoogleTimestamp?: boolean;
+  useGoogleDate?: boolean;
+  useGoogleStruct?: boolean;
 }
 
 /**
@@ -65,12 +67,36 @@ export function mapDrizzleTypeToProto(
     return { protoType: 'bool' };
   }
 
-  // Date/Time types
-  if (
-    baseType.includes('timestamp') ||
-    baseType.includes('date') ||
-    baseType.includes('time')
-  ) {
+  // Timestamp types (check before 'time' since 'timestamp' contains 'time')
+  if (baseType.includes('timestamp')) {
+    if (options.useGoogleTimestamp === false) {
+      return { protoType: 'string' };
+    }
+    return {
+      protoType: 'google.protobuf.Timestamp',
+      needsImport: 'google/protobuf/timestamp.proto',
+    };
+  }
+
+  // Date type (date-only, no time component)
+  if (baseType.includes('date')) {
+    if (options.useGoogleDate) {
+      return {
+        protoType: 'google.type.Date',
+        needsImport: 'google/type/date.proto',
+      };
+    }
+    if (options.useGoogleTimestamp === false) {
+      return { protoType: 'string' };
+    }
+    return {
+      protoType: 'google.protobuf.Timestamp',
+      needsImport: 'google/protobuf/timestamp.proto',
+    };
+  }
+
+  // Time type (time-only, no date component)
+  if (baseType.includes('time')) {
     if (options.useGoogleTimestamp === false) {
       return { protoType: 'string' };
     }
@@ -82,6 +108,12 @@ export function mapDrizzleTypeToProto(
 
   // JSON type
   if (baseType.includes('json') || baseType.includes('jsonb')) {
+    if (options.useGoogleStruct) {
+      return {
+        protoType: 'google.protobuf.Struct',
+        needsImport: 'google/protobuf/struct.proto',
+      };
+    }
     return { protoType: 'string' };
   }
 
@@ -115,7 +147,6 @@ export function mapDrizzleTypeToProto(
   }
 
   // Default to string for unknown types
-  console.warn(`Unknown Drizzle type: ${column.type}, defaulting to string`);
   return { protoType: 'string' };
 }
 

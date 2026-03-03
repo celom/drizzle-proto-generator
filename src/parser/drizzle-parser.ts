@@ -441,6 +441,9 @@ export class DrizzleSchemaParser {
       ignore: this.config.ignoredPatterns,
     });
 
+    // Clear state from any previous parseSchemas call
+    this.knownEnumNames.clear();
+
     const result: ParsedSchema = {
       tables: [],
       enums: [],
@@ -530,7 +533,7 @@ export class DrizzleSchemaParser {
       return data ? { type: 'schema', data } : null;
     }
 
-    if (expressionText.includes(DRIZZLE_DECLARATIONS.TABLE)) {
+    if (expressionText.endsWith(DRIZZLE_DECLARATIONS.TABLE)) {
       const data = this.parseTable(node, callExpr);
       return data ? { type: 'table', data } : null;
     }
@@ -674,7 +677,7 @@ export class DrizzleSchemaParser {
     const identifierName = expression.getText();
 
     // Determine type and database column name
-    const isEnum = this.knownEnumNames.has(identifierName) || identifierName.includes('Enum');
+    const isEnum = this.knownEnumNames.has(identifierName);
     const type = isEnum ? identifierName : extractColumnType(baseCall);
     const dbColumnName = getStringArgument(baseCall, 0) || name;
 

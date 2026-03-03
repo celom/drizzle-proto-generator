@@ -65,8 +65,12 @@ export interface GeneratorConfig {
   // Base package name for proto files
   protoPackageName: string;
   options?: {
-    // Use google.protobuf.Timestamp for date/time fields
+    // Use google.protobuf.Timestamp for timestamp/time fields
     useGoogleTimestamp?: boolean;
+    // Use google.type.Date for date fields (overrides useGoogleTimestamp for date)
+    useGoogleDate?: boolean;
+    // Use google.protobuf.Struct for json/jsonb fields
+    useGoogleStruct?: boolean;
     // Prefix for enum values (empty to use enum name as prefix per style guide)
     enumPrefix?: string;
     // Add UNSPECIFIED as the first enum value

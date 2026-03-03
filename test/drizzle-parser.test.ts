@@ -125,3 +125,26 @@ describe('DrizzleSchemaParser - multi-schema fixture', () => {
     expect(invoicesTable!.schema).toBe('billing');
   });
 });
+
+describe('DrizzleSchemaParser - parser reuse', () => {
+  test('does not leak knownEnumNames across parseSchemas calls', async () => {
+    const parser = new DrizzleSchemaParser();
+
+    // First call: parse enums fixture (has userRoleEnum, statusEnum)
+    const enumResult = await parser.parseSchemas(path.join(FIXTURES_DIR, 'enums'));
+    expect(enumResult.enums.length).toBeGreaterThanOrEqual(1);
+
+    // Second call: parse basic fixture (has no enums)
+    const basicResult = await parser.parseSchemas(path.join(FIXTURES_DIR, 'basic'));
+
+    // Enum names from first call should not affect column type detection in second call
+    const usersTable = basicResult.tables.find(t => t.name === 'users');
+    expect(usersTable).toBeDefined();
+
+    // All columns should have standard types, not be misidentified as enums
+    for (const col of usersTable!.columns) {
+      expect(col.type).not.toBe('userRoleEnum');
+      expect(col.type).not.toBe('statusEnum');
+    }
+  });
+});

@@ -55,7 +55,7 @@ describe('mapDrizzleTypeToProto', () => {
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'boolean' })).protoType).toBe('bool');
   });
 
-  test('timestamp/date/time map to google.protobuf.Timestamp', () => {
+  test('timestamp/date/time map to google.protobuf.Timestamp by default', () => {
     const ts = mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }));
     expect(ts.protoType).toBe('google.protobuf.Timestamp');
     expect(ts.needsImport).toBe('google/protobuf/timestamp.proto');
@@ -64,9 +64,40 @@ describe('mapDrizzleTypeToProto', () => {
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'time' })).protoType).toBe('google.protobuf.Timestamp');
   });
 
-  test('json/jsonb map to string', () => {
+  test('date maps to google.type.Date when useGoogleDate is true', () => {
+    const opts = { useGoogleDate: true };
+    const result = mapDrizzleTypeToProto(makeColumn({ type: 'date' }), opts);
+    expect(result.protoType).toBe('google.type.Date');
+    expect(result.needsImport).toBe('google/type/date.proto');
+  });
+
+  test('date maps to google.type.Date even when useGoogleTimestamp is false', () => {
+    const opts = { useGoogleTimestamp: false, useGoogleDate: true };
+    const result = mapDrizzleTypeToProto(makeColumn({ type: 'date' }), opts);
+    expect(result.protoType).toBe('google.type.Date');
+    expect(result.needsImport).toBe('google/type/date.proto');
+  });
+
+  test('useGoogleDate does not affect timestamp or time types', () => {
+    const opts = { useGoogleDate: true };
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), opts).protoType).toBe('google.protobuf.Timestamp');
+    expect(mapDrizzleTypeToProto(makeColumn({ type: 'time' }), opts).protoType).toBe('google.protobuf.Timestamp');
+  });
+
+  test('json/jsonb map to string by default', () => {
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'json' })).protoType).toBe('string');
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'jsonb' })).protoType).toBe('string');
+  });
+
+  test('json/jsonb map to google.protobuf.Struct when useGoogleStruct is true', () => {
+    const opts = { useGoogleStruct: true };
+    const jsonResult = mapDrizzleTypeToProto(makeColumn({ type: 'json' }), opts);
+    expect(jsonResult.protoType).toBe('google.protobuf.Struct');
+    expect(jsonResult.needsImport).toBe('google/protobuf/struct.proto');
+
+    const jsonbResult = mapDrizzleTypeToProto(makeColumn({ type: 'jsonb' }), opts);
+    expect(jsonbResult.protoType).toBe('google.protobuf.Struct');
+    expect(jsonbResult.needsImport).toBe('google/protobuf/struct.proto');
   });
 
   test('uuid maps to string', () => {
@@ -93,7 +124,7 @@ describe('mapDrizzleTypeToProto', () => {
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'custom_weird_type' })).protoType).toBe('string');
   });
 
-  test('timestamp maps to string when useGoogleTimestamp is false', () => {
+  test('timestamp/date/time map to string when useGoogleTimestamp is false', () => {
     const opts = { useGoogleTimestamp: false };
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'timestamp' }), opts).protoType).toBe('string');
     expect(mapDrizzleTypeToProto(makeColumn({ type: 'date' }), opts).protoType).toBe('string');

@@ -271,6 +271,62 @@ describe('ProtoGenerator', () => {
     expect(result.get('default')!.imports).not.toContain('google/protobuf/timestamp.proto');
   });
 
+  test('maps date fields to google.type.Date when useGoogleDate is true', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'birth_date', type: 'date', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const generator = new ProtoGenerator(makeConfig({ options: { useGoogleDate: true } }));
+    const result = generator.generateProtoFiles([table], []);
+
+    const field = result.get('default')!.messages[0]!.fields[0]!;
+    expect(field.type).toBe('google.type.Date');
+    expect(result.get('default')!.imports).toContain('google/type/date.proto');
+  });
+
+  test('maps date fields to Timestamp by default (useGoogleDate false)', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'birth_date', type: 'date', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], []);
+
+    const field = result.get('default')!.messages[0]!.fields[0]!;
+    expect(field.type).toBe('google.protobuf.Timestamp');
+    expect(result.get('default')!.imports).not.toContain('google/type/date.proto');
+  });
+
+  test('maps json/jsonb fields to google.protobuf.Struct when useGoogleStruct is true', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'metadata', type: 'jsonb', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const generator = new ProtoGenerator(makeConfig({ options: { useGoogleStruct: true } }));
+    const result = generator.generateProtoFiles([table], []);
+
+    const field = result.get('default')!.messages[0]!.fields[0]!;
+    expect(field.type).toBe('google.protobuf.Struct');
+    expect(result.get('default')!.imports).toContain('google/protobuf/struct.proto');
+  });
+
+  test('maps json/jsonb fields to string by default (useGoogleStruct false)', () => {
+    const table = makeTable({
+      columns: [
+        { name: 'metadata', type: 'jsonb', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const generator = new ProtoGenerator(makeConfig());
+    const result = generator.generateProtoFiles([table], []);
+
+    const field = result.get('default')!.messages[0]!.fields[0]!;
+    expect(field.type).toBe('string');
+    expect(result.get('default')!.imports).not.toContain('google/protobuf/struct.proto');
+  });
+
   test('resolves enums by direct enumMap match regardless of naming convention', () => {
     const table = makeTable({
       columns: [

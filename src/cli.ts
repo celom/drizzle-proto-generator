@@ -7,15 +7,19 @@
 import { Command } from 'commander';
 import * as path from 'path';
 import * as fs from 'fs';
+import { createRequire } from 'module';
 import { ProtoGenRunner } from './index.js';
 import type { GeneratorConfig } from './types.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 
 const program = new Command();
 
 program
   .name('proto')
   .description('Generate Protobuf definitions from Drizzle ORM schemas')
-  .version('0.1.0');
+  .version(version);
 
 program
   .command('generate')
@@ -30,6 +34,8 @@ program
   .option('--enum-prefix <prefix>', 'Prefix for enum values', 'PROTO')
   .option('--no-unspecified', 'Do not add UNSPECIFIED enum value')
   .option('--no-google-timestamp', 'Use string instead of google.protobuf.Timestamp for date/time fields')
+  .option('--google-date', 'Use google.type.Date for date fields')
+  .option('--google-struct', 'Use google.protobuf.Struct for json/jsonb fields')
   .option('--preserve-snake-case', 'Preserve snake_case in field names')
   .option('--no-comments', 'Do not generate comments')
   .option('-c, --config <path>', 'Path to configuration file')
@@ -56,6 +62,8 @@ program
           packageResolvers: {},
           options: {
             useGoogleTimestamp: options.googleTimestamp !== false,
+            useGoogleDate: options.googleDate || false,
+            useGoogleStruct: options.googleStruct || false,
             enumPrefix: options.enumPrefix,
             addUnspecified: options.unspecified !== false,
             preserveSnakeCase: options.preserveSnakeCase,
@@ -119,8 +127,14 @@ export default {
 
   // Generation options
   options: {
-    // Use google.protobuf.Timestamp for date/time fields
+    // Use google.protobuf.Timestamp for timestamp/time fields
     useGoogleTimestamp: true,
+
+    // Use google.type.Date for date fields
+    useGoogleDate: false,
+
+    // Use google.protobuf.Struct for json/jsonb fields
+    useGoogleStruct: false,
 
     // Prefix for enum values
     enumPrefix: 'PROTO',

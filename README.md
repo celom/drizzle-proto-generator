@@ -59,6 +59,9 @@ drizzle-proto-generator generate [options]
 | `-p, --package <name>` | `proto` | Base package name for proto files |
 | `--enum-prefix <prefix>` | `PROTO` | Prefix for enum values |
 | `--no-unspecified` | | Do not add `UNSPECIFIED` enum value |
+| `--no-google-timestamp` | | Use `string` instead of `google.protobuf.Timestamp` for date/time fields |
+| `--google-date` | | Use `google.type.Date` for date fields |
+| `--google-struct` | | Use `google.protobuf.Struct` for json/jsonb fields |
 | `--preserve-snake-case` | | Preserve snake_case in field names |
 | `--no-comments` | | Do not generate comments |
 | `-c, --config <path>` | | Path to configuration file |
@@ -88,7 +91,8 @@ export default {
   protoPackageName: 'myapp',
   options: {
     useGoogleTimestamp: true,
-    useGoogleWrappers: false,
+    useGoogleDate: false,
+    useGoogleStruct: false,
     enumPrefix: 'PROTO',
     addUnspecified: true,
     preserveSnakeCase: false,
@@ -111,9 +115,10 @@ drizzle-proto-generator generate -c proto.config.js
 | `outputPath` | `string` | — | Output directory for generated proto files |
 | `protoPackageName` | `string` | — | Base package name for proto files |
 | `packageResolvers` | `Record<string, string>` | `{}` | Map package names to paths (for monorepos) |
-| `options.useGoogleTimestamp` | `boolean` | `true` | Use `google.protobuf.Timestamp` for date/time fields |
-| `options.useGoogleWrappers` | `boolean` | `false` | Use google.protobuf wrappers for nullable types |
-| `options.enumPrefix` | `string` | `''` | Prefix for enum values |
+| `options.useGoogleTimestamp` | `boolean` | `true` | Use `google.protobuf.Timestamp` for timestamp/time fields |
+| `options.useGoogleDate` | `boolean` | `false` | Use `google.type.Date` for date fields |
+| `options.useGoogleStruct` | `boolean` | `false` | Use `google.protobuf.Struct` for json/jsonb fields |
+| `options.enumPrefix` | `string` | `''` | Prefix for enum values (CLI default: `PROTO`) |
 | `options.addUnspecified` | `boolean` | `true` | Add `UNSPECIFIED = 0` as the first enum value |
 | `options.preserveSnakeCase` | `boolean` | `false` | Keep snake_case in field names |
 | `options.generateComments` | `boolean` | `true` | Generate comments in proto files |
@@ -128,8 +133,9 @@ drizzle-proto-generator generate -c proto.config.js
 | `real`, `float4` | `float` |
 | `double`, `float8`, `numeric`, `decimal` | `double` |
 | `boolean` | `bool` |
-| `timestamp`, `date`, `time` | `google.protobuf.Timestamp` |
-| `json`, `jsonb` | `string` |
+| `timestamp`, `time` | `google.protobuf.Timestamp` (or `string`) |
+| `date` | `google.protobuf.Timestamp` (or `google.type.Date` / `string`) |
+| `json`, `jsonb` | `string` (or `google.protobuf.Struct`) |
 | `uuid` | `string` |
 | `bytea`, `blob`, `binary` | `bytes` |
 | `inet`, `cidr`, `macaddr` | `string` |

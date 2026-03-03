@@ -35,15 +35,17 @@ export class ProtoGenerator {
 
   constructor(config: GeneratorConfig) {
     this.config = {
+      ...config,
       options: {
         useGoogleTimestamp: true,
+        useGoogleDate: false,
+        useGoogleStruct: false,
         enumPrefix: '',
         addUnspecified: true,
         preserveSnakeCase: false,
         generateComments: true,
         ...config.options,
       },
-      ...config,
     };
     this.enumMap = new Map();
     this.enumUsageMap = new Map();
@@ -198,6 +200,10 @@ export class ProtoGenerator {
           } else if (field.type.includes('Any')) {
             imports.add('google/protobuf/any.proto');
           }
+        } else if (field.type.includes('google.type')) {
+          if (field.type.includes('Date')) {
+            imports.add('google/type/date.proto');
+          }
         }
       }
     }
@@ -288,6 +294,8 @@ export class ProtoGenerator {
       // Use standard type mapping
       typeMapping = mapDrizzleTypeToProto(column, {
         useGoogleTimestamp: this.config.options?.useGoogleTimestamp,
+        useGoogleDate: this.config.options?.useGoogleDate,
+        useGoogleStruct: this.config.options?.useGoogleStruct,
       });
 
       // Handle enum types from type mapping (fallback for 'enum' in type name)
