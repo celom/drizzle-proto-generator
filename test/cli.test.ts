@@ -1,4 +1,4 @@
-import { test, expect, describe, afterAll } from 'bun:test';
+import { test, expect, describe, beforeAll, afterAll } from 'bun:test';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -6,14 +6,19 @@ const CLI_PATH = path.join(import.meta.dir, '..', 'src', 'cli.ts');
 const FIXTURES_DIR = path.join(import.meta.dir, 'fixtures');
 const OUTPUT_DIR = path.join(import.meta.dir, 'output', 'cli');
 
+beforeAll(async () => {
+  await fs.mkdir(OUTPUT_DIR, { recursive: true });
+});
+
 afterAll(async () => {
   await fs.rm(OUTPUT_DIR, { recursive: true, force: true });
 });
 
-async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function runCli(args: string[], cwd?: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn(['bun', CLI_PATH, ...args], {
     stdout: 'pipe',
     stderr: 'pipe',
+    cwd: cwd ?? OUTPUT_DIR,
     env: { ...process.env },
   });
 

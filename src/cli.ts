@@ -42,16 +42,22 @@ program
   .option('-c, --config <path>', 'Path to configuration file')
   .action(async (options) => {
     try {
-      // Load config from file if provided
+      // Load config from file if provided, or auto-detect in current directory
       let config: GeneratorConfig;
 
-      if (options.config) {
-        const configPath = path.resolve(options.config);
+      const configPath = options.config
+        ? path.resolve(options.config)
+        : fs.existsSync(path.resolve('proto.config.js'))
+          ? path.resolve('proto.config.js')
+          : null;
+
+      if (configPath) {
         if (!fs.existsSync(configPath)) {
           console.error(`Config file not found: ${configPath}`);
           process.exit(1);
         }
 
+        console.log(`Using config file: ${configPath}`);
         const configModule = await import(configPath);
         config = configModule.default || configModule;
       } else {
