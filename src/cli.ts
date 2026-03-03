@@ -14,6 +14,34 @@ import type { GeneratorConfig } from './types.js';
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
 
+/**
+ * Build a partial config from CLI flags that were explicitly set (not defaults).
+ * Used to merge CLI overrides on top of a config file.
+ */
+function buildCliOverrides(options: Record<string, unknown>): Partial<GeneratorConfig> {
+  const overrides: Partial<GeneratorConfig> = {};
+  const optionOverrides: Partial<NonNullable<GeneratorConfig['options']>> = {};
+
+  if (options.input !== 'src/schema') overrides.inputPath = path.resolve(options.input as string);
+  if (options.output !== 'proto') overrides.outputPath = path.resolve(options.output as string);
+  if (options.package !== 'proto') overrides.protoPackageName = options.package as string;
+
+  if (options.fresh) optionOverrides.fresh = true;
+  if (options.camelCase) optionOverrides.useCamelCase = true;
+  if (options.googleDate) optionOverrides.useGoogleDate = true;
+  if (options.googleStruct) optionOverrides.useGoogleStruct = true;
+  if (options.googleTimestamp === false) optionOverrides.useGoogleTimestamp = false;
+  if (options.unspecified === false) optionOverrides.addUnspecified = false;
+  if (options.comments === false) optionOverrides.generateComments = false;
+  if (options.enumPrefix !== undefined) optionOverrides.enumPrefix = options.enumPrefix as string;
+
+  if (Object.keys(optionOverrides).length > 0) {
+    overrides.options = optionOverrides;
+  }
+
+  return overrides;
+}
+
 const program = new Command();
 
 program
@@ -31,7 +59,7 @@ program
   )
   .option('-o, --output <path>', 'Output directory for proto files', 'proto')
   .option('-p, --package <name>', 'Base package name for proto files', 'proto')
-  .option('--enum-prefix <prefix>', 'Prefix for enum values', 'PROTO')
+  .option('--enum-prefix <prefix>', 'Prefix for enum values')
   .option('--no-unspecified', 'Do not add UNSPECIFIED enum value')
   .option('--no-google-timestamp', 'Use string instead of google.protobuf.Timestamp for date/time fields')
   .option('--google-date', 'Use google.type.Date for date fields')
@@ -51,6 +79,24 @@ program
           ? path.resolve('proto.config.js')
           : null;
 
+      // Build config entirely from CLI flags
+      const cliConfig: GeneratorConfig = {
+        inputPath: path.resolve(options.input),
+        outputPath: path.resolve(options.output),
+        protoPackageName: options.package,
+        packageResolvers: {},
+        options: {
+          useGoogleTimestamp: options.googleTimestamp !== false,
+          useGoogleDate: options.googleDate || false,
+          useGoogleStruct: options.googleStruct || false,
+          ...(options.enumPrefix !== undefined && { enumPrefix: options.enumPrefix }),
+          addUnspecified: options.unspecified !== false,
+          useCamelCase: options.camelCase || false,
+          generateComments: options.comments !== false,
+          fresh: options.fresh || false,
+        },
+      };
+
       if (configPath) {
         if (!fs.existsSync(configPath)) {
           console.error(`Config file not found: ${configPath}`);
@@ -59,25 +105,17 @@ program
 
         console.log(`Using config file: ${configPath}`);
         const configModule = await import(configPath);
-        config = configModule.default || configModule;
-      } else {
-        // Build config from CLI options
+        const fileConfig: GeneratorConfig = configModule.default || configModule;
+
+        // Merge: CLI flags that differ from defaults override file config
+        const cliOverrides = buildCliOverrides(options);
         config = {
-          inputPath: path.resolve(options.input),
-          outputPath: path.resolve(options.output),
-          protoPackageName: options.package,
-          packageResolvers: {},
-          options: {
-            useGoogleTimestamp: options.googleTimestamp !== false,
-            useGoogleDate: options.googleDate || false,
-            useGoogleStruct: options.googleStruct || false,
-            enumPrefix: options.enumPrefix,
-            addUnspecified: options.unspecified !== false,
-            useCamelCase: options.camelCase || false,
-            generateComments: options.comments !== false,
-            fresh: options.fresh || false,
-          },
+          ...fileConfig,
+          ...cliOverrides,
+          options: { ...fileConfig.options, ...cliOverrides.options },
         };
+      } else {
+        config = cliConfig;
       }
 
       // Validate input path
@@ -95,7 +133,7 @@ program
       const runner = new ProtoGenRunner(config);
       const result = await runner.run();
 
-      console.log(`  Found ${result.tableCount} tables, ${result.enumCount} enums, ${result.schemaCount} schemas`);
+      console.log(`  Found ${result.tableCount} tables, ${result.enumCount} enums, ${result.declaredSchemaCount} schemas`);
       console.log(`  Generated ${result.fileCount} proto file(s):`);
       for (const file of result.writtenFiles) {
         console.log(`    ${file}`);
@@ -144,8 +182,8 @@ export default {
     // Use google.protobuf.Struct for json/jsonb fields
     useGoogleStruct: false,
 
-    // Prefix for enum values
-    enumPrefix: 'PROTO',
+    // Prefix for enum values (omit for proto style guide default: enum name as prefix)
+    // enumPrefix: '',
 
     // Add UNSPECIFIED as the first enum value
     addUnspecified: true,

@@ -72,7 +72,6 @@ export class ProtoGenerator {
         useGoogleTimestamp: true,
         useGoogleDate: false,
         useGoogleStruct: false,
-        enumPrefix: '',
         addUnspecified: true,
         useCamelCase: false,
         generateComments: true,
@@ -92,6 +91,9 @@ export class ProtoGenerator {
     registry?: FieldNumberRegistry,
   ): Map<string, ProtoFile> {
     validatePackageName(this.config.protoPackageName);
+
+    // Clear state from any previous call
+    this.enumMap.clear();
 
     // Build enum map for reference
     enums.forEach((e) => this.enumMap.set(e.name, e));

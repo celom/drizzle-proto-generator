@@ -66,7 +66,7 @@ export class ProtoGenRunner {
     return {
       tableCount: parsedSchema.tables.length,
       enumCount: parsedSchema.enums.length,
-      schemaCount: parsedSchema.schemas.length,
+      declaredSchemaCount: parsedSchema.schemas.length,
       fileCount: protoFiles.size,
       writtenFiles,
     };

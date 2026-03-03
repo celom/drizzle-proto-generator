@@ -628,3 +628,28 @@ describe('package name validation', () => {
     expect(() => gen.generateProtoFiles([makeTable()], [])).not.toThrow();
   });
 });
+
+describe('state isolation', () => {
+  test('does not leak enums between generateProtoFiles calls', () => {
+    const generator = new ProtoGenerator(makeConfig());
+
+    // First call with an enum
+    const table1 = makeTable({
+      columns: [
+        { name: 'role', type: 'roleEnum', isNullable: false, isPrimaryKey: false, isUnique: false, isArray: false },
+      ],
+    });
+    const enums1: SchemaEnum[] = [{ name: 'roleEnum', values: ['admin', 'viewer'] }];
+    const result1 = generator.generateProtoFiles([table1], enums1);
+    expect(result1.get('default')!.enums.length).toBe(1);
+
+    // Second call WITHOUT the enum — should not carry over
+    const table2 = makeTable({
+      columns: [
+        { name: 'id', type: 'uuid', isNullable: false, isPrimaryKey: true, isUnique: false, isArray: false },
+      ],
+    });
+    const result2 = generator.generateProtoFiles([table2], []);
+    expect(result2.get('default')!.enums).toEqual([]);
+  });
+});

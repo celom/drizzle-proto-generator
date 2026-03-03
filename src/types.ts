@@ -91,7 +91,7 @@ export interface GeneratorConfig {
 export interface GenerationResult {
   tableCount: number;
   enumCount: number;
-  schemaCount: number;
+  declaredSchemaCount: number;
   fileCount: number;
   writtenFiles: string[];
 }

@@ -109,7 +109,7 @@ describe('End-to-end', () => {
     // basic fixture has exactly 2 tables (users, posts), 0 enums, 1 schema (app)
     expect(result.tableCount).toBe(2);
     expect(result.enumCount).toBe(0);
-    expect(result.schemaCount).toBe(1);
+    expect(result.declaredSchemaCount).toBe(1);
     expect(result.fileCount).toBe(1);
     expect(result.writtenFiles).toHaveLength(1);
     expect(result.writtenFiles[0]).toContain('gen_types.proto');
