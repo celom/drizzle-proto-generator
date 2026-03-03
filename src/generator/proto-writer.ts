@@ -36,7 +36,7 @@ export class ProtoWriter {
   /**
    * Generate proto file content
    */
-  private generateProtoContent(protoFile: ProtoFile): string {
+  generateProtoContent(protoFile: ProtoFile): string {
     const lines: string[] = [];
 
     // Auto-generated warning header
@@ -199,7 +199,7 @@ export class ProtoWriter {
   /**
    * Get full file path following the pattern: <outputPath>/<packageName>/<versionNumber>/gen_types.proto
    */
-  private getFilePath(outputPath: string, protoFile: ProtoFile): string {
+  getFilePath(outputPath: string, protoFile: ProtoFile): string {
     // Parse package name (e.g., "bueller.user.v1" -> ["bueller", "user", "v1"])
     // Or "bueller.common.v1" -> ["bueller", "common", "v1"]
     const packageParts = protoFile.package.split('.');

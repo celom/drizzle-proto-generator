@@ -85,6 +85,8 @@ export interface GeneratorConfig {
     generateComments?: boolean;
     // Skip reading previous proto files, assign field numbers sequentially
     fresh?: boolean;
+    // Preview generated output without writing files
+    dryRun?: boolean;
   };
 }
 

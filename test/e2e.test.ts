@@ -132,6 +132,32 @@ describe('End-to-end', () => {
   });
 });
 
+describe('End-to-end - dry run', () => {
+  test('does not write files when dryRun is true', async () => {
+    const outputDir = path.join(OUTPUT_DIR, 'dry-run-test');
+    const runner = new ProtoGenRunner({
+      inputPath: path.join(FIXTURES_DIR, 'basic'),
+      outputPath: outputDir,
+      protoPackageName: 'testapp',
+      options: { dryRun: true },
+    });
+
+    const result = await runner.run();
+
+    // Should still report correct counts
+    expect(result.tableCount).toBe(2);
+    expect(result.enumCount).toBe(0);
+    expect(result.fileCount).toBe(1);
+    expect(result.writtenFiles).toHaveLength(1);
+    expect(result.writtenFiles[0]).toContain('gen_types.proto');
+
+    // But no files should actually exist on disk
+    const protoPath = path.join(outputDir, 'testapp', 'app', 'v1', 'gen_types.proto');
+    const exists = await fs.access(protoPath).then(() => true).catch(() => false);
+    expect(exists).toBe(false);
+  });
+});
+
 describe('End-to-end - field number stability', () => {
   test('preserves field numbers across regenerations', async () => {
     const outputDir = path.join(OUTPUT_DIR, 'stability-test');

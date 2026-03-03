@@ -58,6 +58,25 @@ export class ProtoGenRunner {
       registry,
     );
 
+    if (this.config.options?.dryRun) {
+      const wouldWrite: string[] = [];
+      for (const [, protoFile] of protoFiles.entries()) {
+        const filePath = this.writer.getFilePath(this.config.outputPath, protoFile);
+        const content = this.writer.generateProtoContent(protoFile);
+        wouldWrite.push(filePath);
+        console.log(`\n--- ${filePath} ---\n`);
+        console.log(content);
+      }
+
+      return {
+        tableCount: parsedSchema.tables.length,
+        enumCount: parsedSchema.enums.length,
+        declaredSchemaCount: parsedSchema.schemas.length,
+        fileCount: protoFiles.size,
+        writtenFiles: wouldWrite,
+      };
+    }
+
     const writtenFiles = await this.writer.writeProtoFiles(
       protoFiles,
       this.config.outputPath,

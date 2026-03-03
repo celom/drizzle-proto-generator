@@ -27,6 +27,7 @@ function buildCliOverrides(options: Record<string, unknown>): Partial<GeneratorC
   if (options.package !== 'proto') overrides.protoPackageName = options.package as string;
 
   if (options.fresh) optionOverrides.fresh = true;
+  if (options.dryRun) optionOverrides.dryRun = true;
   if (options.camelCase) optionOverrides.useCamelCase = true;
   if (options.googleDate) optionOverrides.useGoogleDate = true;
   if (options.googleStruct) optionOverrides.useGoogleStruct = true;
@@ -67,6 +68,7 @@ program
   .option('--camel-case', 'Use camelCase for field names instead of snake_case')
   .option('--no-comments', 'Do not generate comments')
   .option('--fresh', 'Ignore previously generated proto files and assign field numbers sequentially')
+  .option('--dry-run', 'Preview what would be generated without writing files')
   .option('-c, --config <path>', 'Path to configuration file')
   .action(async (options) => {
     try {
@@ -94,6 +96,7 @@ program
           useCamelCase: options.camelCase || false,
           generateComments: options.comments !== false,
           fresh: options.fresh || false,
+          dryRun: options.dryRun || false,
         },
       };
 
@@ -134,12 +137,20 @@ program
       const result = await runner.run();
 
       console.log(`  Found ${result.tableCount} tables, ${result.enumCount} enums, ${result.declaredSchemaCount} schemas`);
-      console.log(`  Generated ${result.fileCount} proto file(s):`);
-      for (const file of result.writtenFiles) {
-        console.log(`    ${file}`);
-      }
 
-      console.log('Proto generation completed successfully!');
+      if (config.options?.dryRun) {
+        console.log(`\n  Would generate ${result.fileCount} proto file(s):`);
+        for (const file of result.writtenFiles) {
+          console.log(`    ${file}`);
+        }
+        console.log('\nDry run complete. No files were written.');
+      } else {
+        console.log(`  Generated ${result.fileCount} proto file(s):`);
+        for (const file of result.writtenFiles) {
+          console.log(`    ${file}`);
+        }
+        console.log('Proto generation completed successfully!');
+      }
     } catch (error) {
       console.error('Proto generation failed:', error);
       process.exit(1);
